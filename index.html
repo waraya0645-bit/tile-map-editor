@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>タイルマップエディター</title>
+<style>
+:root{color-scheme:light dark;--bg:#f5f6f8;--panel:#fff;--text:#20242a;--muted:#68707b;--border:#d6dbe2;--accent:#356ae6;--block-line:#2b65d9}
+@media(prefers-color-scheme:dark){:root{--bg:#15171b;--panel:#22252b;--text:#edf0f5;--muted:#a9b0bb;--border:#424752;--accent:#7197ff;--block-line:#9bb7ff}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,sans-serif}
+main{max-width:1100px;margin:auto;padding:16px;display:grid;gap:14px}
+h1{font-size:1.35rem;margin:0}h2{font-size:1rem;margin:0 0 12px}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px;min-width:0}
+.row{display:flex;align-items:end;flex-wrap:wrap;gap:10px}.grow{flex:1}
+label{display:grid;gap:4px;font-size:.85rem;color:var(--muted)}
+input,button,textarea{font:inherit}input[type=number]{width:92px;min-width:0;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)}
+input[type=color]{width:48px;height:42px;padding:2px;border:1px solid var(--border);border-radius:8px;background:var(--bg)}
+input[type=file]{max-width:100%;font-size:.85rem}
+button{border:1px solid var(--border);border-radius:9px;padding:8px 12px;background:var(--panel);color:var(--text);cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+button.primary{background:var(--accent);color:white;border-color:var(--accent)}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid #7197ff;outline-offset:2px}
+.small{font-size:.82rem;color:var(--muted)}.palette{display:flex;gap:8px;flex-wrap:wrap}
+.tile{min-width:60px;min-height:62px;padding:5px;display:grid;place-items:center;gap:3px;border:2px solid var(--border);border-radius:9px}
+.tile.selected{outline:3px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+.swatch{width:28px;height:25px;border:1px solid #7778;border-radius:4px}
+.canvas-scroll{overflow:auto;max-width:100%;padding:3px;touch-action:none;overscroll-behavior:contain}
+.grid{display:grid;gap:1px;background:var(--border);border:1px solid var(--border);width:max-content;min-width:100%;touch-action:manipulation}
+.cell{width:var(--cell-size,30px);height:var(--cell-size,30px);border:0;border-radius:0;padding:0;display:grid;place-items:center;font-size:11px;font-weight:650;overflow:hidden;color:#111;user-select:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent}.cell.block-right{border-right:3px solid var(--block-line)}.cell.block-bottom{border-bottom:3px solid var(--block-line)}
+textarea{display:block;width:100%;min-height:210px;padding:10px;border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--text);font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;resize:vertical}
+.status{min-height:1.4em;color:var(--muted);font-size:.85rem}
+.anchor-wrap{display:grid;gap:6px;align-content:start}
+.anchor-grid{display:grid;grid-template-columns:repeat(3,58px);gap:5px}
+.anchor-option{width:58px;height:54px;padding:3px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;font-size:21px;line-height:1.1}
+.anchor-option span{font-size:11px;line-height:1.2}
+.anchor-option[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff;outline:2px solid var(--accent);outline-offset:1px}
+hr{border:0;border-top:1px solid var(--border);margin:14px 0}
+@media(min-width:800px){main{grid-template-columns:1fr 1.5fr}header,.output-panel{grid-column:1/-1}}
+</style>
+</head>
+<body>
+<main>
+<header><h1>タイルマップエディター</h1><div class="small">タイル作成・マップ編集・配列の保存と読み込み</div></header>
+<section class="panel">
+<h2>1. タイルを作成・登録</h2>
+<div class="row">
+<label>タイル番号<input id="tileNumber" type="number" min="1" max="999999" value="1"></label>
+<label>色<input id="tileColor" type="color" value="#9b9b9b"></label>
+<button class="primary" id="registerTile">登録／色を更新</button>
+</div>
+<p class="small">番号0は空白です。タイル番号は1以上の整数を使います。</p>
+<hr>
+<div class="row" style="justify-content:space-between"><h2 style="margin:0">2. パレット</h2><span id="selectedLabel" class="small">選択中：0（空白）</span></div>
+<div id="palette" class="palette" style="margin-top:10px"></div>
+<p class="small">タイルを選び、右側のマスをタップして塗ります。</p>
+</section>
+<section class="panel">
+<h2>3. キャンバスサイズ</h2>
+<div class="row">
+<label>列数<input id="cols" type="number" min="1" max="100" value="18"></label>
+<label>行数<input id="rows" type="number" min="1" max="100" value="10"></label>
+<button id="resize" class="primary">サイズを変更</button>
+<div class="anchor-wrap">
+<span class="small">サイズ変更時の基準点</span>
+<div class="anchor-grid" role="group" aria-label="サイズ変更時の基準点">
+<button type="button" class="anchor-option" data-x="west" data-y="north" aria-pressed="false" aria-label="左上を基準">↖<span>左上</span></button>
+<button type="button" class="anchor-option" data-x="center" data-y="north" aria-pressed="false" aria-label="上を基準">↑<span>上</span></button>
+<button type="button" class="anchor-option" data-x="east" data-y="north" aria-pressed="false" aria-label="右上を基準">↗<span>右上</span></button>
+<button type="button" class="anchor-option" data-x="west" data-y="center" aria-pressed="false" aria-label="左を基準">←<span>左</span></button>
+<button type="button" class="anchor-option" data-x="center" data-y="center" aria-pressed="true" aria-label="中央を基準">●<span>中央</span></button>
+<button type="button" class="anchor-option" data-x="east" data-y="center" aria-pressed="false" aria-label="右を基準">→<span>右</span></button>
+<button type="button" class="anchor-option" data-x="west" data-y="south" aria-pressed="false" aria-label="左下を基準">↙<span>左下</span></button>
+<button type="button" class="anchor-option" data-x="center" data-y="south" aria-pressed="false" aria-label="下を基準">↓<span>下</span></button>
+<button type="button" class="anchor-option" data-x="east" data-y="south" aria-pressed="false" aria-label="右下を基準">↘<span>右下</span></button>
+</div>
+</div>
+</div>
+<p class="small">最大100×100マス。選んだ基準点の位置を保ってサイズを変更します。拡張時は反対側にマスを追加し、縮小時は反対側からマスを削除します。</p>
+<hr>
+<h2>ブロック分け・区切り線</h2>
+<div class="row">
+<label>ブロックの列数<input id="blockCols" type="number" min="1" max="100" value="18"></label>
+<label>ブロックの行数<input id="blockRows" type="number" min="1" max="100" value="10"></label>
+<button id="applyBlocks" class="primary">区切り線を適用</button>
+</div>
+<p class="small">ここで指定するのは1ブロックあたりのマス数です。例：マップ54列×30行、ブロック18列×10行なら、左上から横3×縦3の9ブロックに分かれます。</p>
+<div id="blockInfo" class="status" aria-live="polite">ブロック：横1 × 縦1</div>
+<hr>
+<div class="row" style="justify-content:space-between;align-items:center">
+<h2 style="margin:0">マップ</h2><span id="dimensions" class="small">18列 × 10行</span>
+</div>
+<div class="canvas-scroll" style="margin-top:10px"><div id="mapGrid" class="grid" aria-label="タイルマップ"></div></div>
+<div class="row" style="margin-top:12px">
+<button id="undo">1手戻す</button><button id="clear">全マスを空白にする</button><button id="refresh" class="primary">配列を更新</button>
+</div>
+</section>
+<section class="panel output-panel">
+<h2>4. 配列の出力・保存・読み込み</h2>
+<p class="small">配列だけのテキストも読み込めます。保存用ファイルにはサイズ・タイル色・配置も含めるため、後日そのまま再開できます。</p>
+<textarea id="output" spellcheck="false" aria-label="マップ配列"></textarea>
+<div class="row" style="margin-top:10px">
+<button id="copy" class="primary">配列をコピー</button>
+<button id="saveTxt">配列を .txt 保存</button>
+<button id="saveProject">編集データを保存</button>
+</div>
+<hr>
+<div class="row">
+<label class="grow">ファイルを読み込む<input id="loadFile" type="file" accept=".txt,.json,text/plain,application/json"></label>
+<button id="loadArray">入力欄の配列を読み込む</button>
+</div>
+<p class="small">編集データのJSON、または「[0,1,0], [0,0,1]」のような配列を読み込めます。</p>
+<div id="status" class="status" role="status" aria-live="polite">準備完了</div>
+</section>
+</main>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  let cols=18, rows=10, selected=0;
+  let blockCols=18, blockRows=10;
+  let cellSize=30;
+  let resizeAnchorX='center', resizeAnchorY='center';
+  let palette=new Map([[0,{color:'#ffffff'}]]);
+  let map=Array.from({length:rows},()=>Array(cols).fill(0));
+  let history=[];
+  const MAX_DIM=100, MAX_CELLS=10000;
+  const say=msg=>$('status').textContent=msg;
+  const label=n=>n===0?'0（空白）':String(n);
+  // iPad Safari: run touch activation directly, and suppress the follow-up synthetic click.
+  function bindTap(element, action){
+    let lastTouch=0;
+    element.addEventListener('touchend', event=>{
+      event.preventDefault();
+      lastTouch=Date.now();
+      action(event);
+    }, {passive:false});
+    element.addEventListener('click', event=>{
+      if(Date.now()-lastTouch<800){event.preventDefault();return;}
+      action(event);
+    });
+  }
+  const mapText=()=>map.map(row=>'['+row.join(',')+']').join(',\n');
+  function updateOutput(){ $('output').value=mapText(); }
+  function renderPalette(){
+    const box=$('palette');box.replaceChildren();
+    [...palette.keys()].sort((a,b)=>a-b).forEach(n=>{
+      const b=document.createElement('button');
+      b.type='button';b.className='tile'+(n===selected?' selected':'');
+      b.setAttribute('aria-label','タイル '+label(n));
+      const sw=document.createElement('span');sw.className='swatch';sw.style.background=palette.get(n).color;
+      const tx=document.createElement('span');tx.textContent=n;tx.style.fontSize='12px';
+      b.append(sw,tx);
+      bindTap(b,()=>{selected=n;$('selectedLabel').textContent='選択中：'+label(n);renderPalette();});
+      box.append(b);
+    });
+  }
+  function renderMap(){
+    const grid=$('mapGrid');grid.replaceChildren();
+    grid.style.setProperty('--cell-size',`${cellSize}px`);
+    grid.style.gridTemplateColumns=`repeat(${cols}, ${cellSize}px)`;
+    // Fixed-width cells keep separator lines aligned; large maps scroll horizontally.
+    grid.style.width=`${cols*cellSize+(cols-1)+2}px`;
+    map.forEach((row,y)=>row.forEach((n,x)=>{
+      const b=document.createElement('button');b.type='button';b.className='cell';
+      if((x+1)<cols&&(x+1)%blockCols===0)b.classList.add('block-right');
+      if((y+1)<rows&&(y+1)%blockRows===0)b.classList.add('block-bottom');
+      b.style.background=palette.get(n)?.color||'#ff00ff';
+      b.textContent=n===0?'':String(n);
+      b.title=`${y+1}行 ${x+1}列：${n}`;
+      b.setAttribute('aria-label',`${y+1}行 ${x+1}列、番号${n}`);
+      b.addEventListener('click',()=>{ if(!suppressCellClick) paint(x,y); });
+      grid.append(b);
+    }));
+    $('dimensions').textContent=`${cols}列 × ${rows}行（${cols*rows}マス）`;
+    updateBlockInfo();
+  }
+  function updateBlockInfo(){
+    const h=Math.ceil(cols/blockCols),v=Math.ceil(rows/blockRows);
+    $('blockInfo').textContent=`ブロック：横${h} × 縦${v} = ${h*v}個${(cols%blockCols||rows%blockRows)?'（端の余りは小さいブロック）':''}`;
+  }
+  function paint(x,y){
+    const old=map[y][x];if(old===selected)return;
+    history.push({x,y,old});if(history.length>1000)history.shift();
+    map[y][x]=selected;
+    const cell=$('mapGrid').children[y*cols+x];
+    cell.style.background=palette.get(selected)?.color||'#ff00ff';
+    cell.textContent=selected===0?'':String(selected);
+    cell.title=`${y+1}行 ${x+1}列：${selected}`;
+    cell.setAttribute('aria-label',`${y+1}行 ${x+1}列、番号${selected}`);
+    updateOutput();
+  }
+  bindTap($('registerTile'),()=>{
+    const n=Number($('tileNumber').value);
+    if(!Number.isSafeInteger(n)||n<1||n>999999){say('タイル番号は1〜999999の整数にしてください。');return;}
+    palette.set(n,{color:$('tileColor').value});selected=n;
+    $('selectedLabel').textContent='選択中：'+label(n);
+    renderPalette();renderMap();say(`タイル${n}を登録しました。`);
+  });
+  document.querySelectorAll('.anchor-option').forEach(button=>{
+    bindTap(button,()=>{
+      resizeAnchorX=button.dataset.x;
+      resizeAnchorY=button.dataset.y;
+      document.querySelectorAll('.anchor-option').forEach(option=>{
+        option.setAttribute('aria-pressed',String(option===button));
+      });
+      say('サイズ変更の基準点を「'+button.getAttribute('aria-label').replace('を基準','')+'」にしました。');
+    });
+  });
+  $('resize').addEventListener('click',()=>{
+    const nc=Number($('cols').value),nr=Number($('rows').value);
+    if(!Number.isInteger(nc)||!Number.isInteger(nr)||nc<1||nr<1||nc>MAX_DIM||nr>MAX_DIM||nc*nr>MAX_CELLS){
+      say('列数・行数はそれぞれ1〜100、合計10000マス以内にしてください。');return;
+    }
+    const dx=resizeAnchorX==='west'?0:resizeAnchorX==='east'?nc-cols:Math.floor((nc-cols)/2);
+    const dy=resizeAnchorY==='north'?0:resizeAnchorY==='south'?nr-rows:Math.floor((nr-rows)/2);
+    const next=Array.from({length:nr},()=>Array(nc).fill(0));
+    for(let y=0;y<rows;y++){
+      for(let x=0;x<cols;x++){
+        const nx=x+dx,ny=y+dy;
+        if(nx>=0&&nx<nc&&ny>=0&&ny<nr)next[ny][nx]=map[y][x];
+      }
+    }
+    cols=nc;rows=nr;map=next;history=[];renderMap();updateOutput();
+    const anchor=document.querySelector('.anchor-option[aria-pressed="true"]');
+    const anchorName=anchor?anchor.getAttribute('aria-label').replace('を基準',''):'中央';
+    say(`キャンバスを${cols}列×${rows}行に変更しました。基準点：${anchorName}。`);
+  });
+  $('applyBlocks').addEventListener('click',()=>{
+    const bc=Number($('blockCols').value),br=Number($('blockRows').value);
+    if(!Number.isInteger(bc)||!Number.isInteger(br)||bc<1||br<1||bc>MAX_DIM||br>MAX_DIM){
+      say('ブロックの列数・行数はそれぞれ1〜100の整数にしてください。');return;
+    }
+    blockCols=bc;blockRows=br;renderMap();
+    say(`区切り線を適用しました。1ブロックは${blockCols}列×${blockRows}行です。`);
+  });
+  $('undo').addEventListener('click',()=>{
+    const h=history.pop();if(!h){say('戻せる操作がありません。');return;}
+    if(h.y<rows&&h.x<cols){map[h.y][h.x]=h.old;renderMap();updateOutput();}
+    say('直前の操作を取り消しました。');
+  });
+  $('clear').addEventListener('click',()=>{
+    history=[];map=Array.from({length:rows},()=>Array(cols).fill(0));renderMap();updateOutput();say('すべて空白にしました。');
+  });
+  $('refresh').addEventListener('click',()=>{updateOutput();say('配列を更新しました。');});
+  $('copy').addEventListener('click',async()=>{
+    try{
+      await navigator.clipboard.writeText($('output').value);say('配列をコピーしました。');
+    }catch(e){
+      $('output').focus();$('output').select();
+      try{if(document.execCommand('copy')){say('配列をコピーしました。');return;}}catch(_){}
+      say('配列を選択しました。長押ししてコピーしてください。');
+    }
+  });
+  function download(name,content,type){
+    const blob=new Blob([content],{type});
+    const url=URL.createObjectURL(blob);const a=document.createElement('a');
+    a.href=url;a.download=name;document.body.append(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1500);
+  }
+  $('saveTxt').addEventListener('click',()=>download('mapData.txt',mapText(),'text/plain;charset=utf-8'));
+  $('saveProject').addEventListener('click',()=>{
+    const project={format:'tile-map-editor',version:1,cols,rows,blockCols,blockRows,palette:[...palette.entries()].map(([id,v])=>({id,color:v.color})),map};
+    download('tile-map-project.json',JSON.stringify(project,null,2),'application/json;charset=utf-8');
+    say('編集データを保存しました。JSONファイルから再開できます。');
+  });
+  function applyArray(data){
+    if(!Array.isArray(data)||!data.length||!data.every(r=>Array.isArray(r)&&r.length===data[0].length&&r.length>0))
+      throw new Error('配列は、同じ長さの行が並ぶ二次元配列にしてください。');
+    const nr=data.length,nc=data[0].length;
+    if(nr>MAX_DIM||nc>MAX_DIM||nr*nc>MAX_CELLS)throw new Error('読み込み可能な上限は100×100マスです。');
+    const clean=data.map(row=>row.map(n=>{
+      if(!Number.isSafeInteger(n)||n<0||n>999999)throw new Error('タイル番号は0〜999999の整数にしてください。');
+      return n;
+    }));
+    clean.flat().forEach(n=>{if(!palette.has(n))palette.set(n,{color:defaultColor(n)});});
+    cols=nc;rows=nr;map=clean;history=[];
+    $('cols').value=cols;$('rows').value=rows;renderPalette();renderMap();updateOutput();
+  }
+  function defaultColor(n){
+    const hue=(n*137.508)%360;
+    return `hsl(${hue} 55% 68%)`;
+  }
+  function loadText(text){
+    let parsed;
+    try{parsed=JSON.parse(text);}catch(_){
+      // Accept row-by-row array output without evaluating arbitrary code.
+      const cleaned=text.trim().replace(/;\s*$/,'');
+      if(!/^[\s\[\],\d]+$/.test(cleaned))throw new Error('JSONまたは数値だけの二次元配列を読み込んでください。');
+      try{parsed=JSON.parse('['+cleaned+']');}catch(e){throw new Error('配列の形式を読み取れませんでした。');}
+    }
+    if(parsed&&parsed.format==='tile-map-editor'){
+      if(!Array.isArray(parsed.palette))throw new Error('保存データのパレットが不正です。');
+      const newPalette=new Map([[0,{color:'#ffffff'}]]);
+      parsed.palette.forEach(t=>{
+        if(Number.isSafeInteger(t.id)&&t.id>=1&&t.id<=999999&&typeof t.color==='string'&&/^#[0-9a-f]{6}$/i.test(t.color))
+          newPalette.set(t.id,{color:t.color});
+      });
+      palette=newPalette;
+      if(!Array.isArray(parsed.map))throw new Error('保存データのマップが不正です。');
+      blockCols=Number.isInteger(parsed.blockCols)&&parsed.blockCols>=1&&parsed.blockCols<=MAX_DIM?parsed.blockCols:18;
+      blockRows=Number.isInteger(parsed.blockRows)&&parsed.blockRows>=1&&parsed.blockRows<=MAX_DIM?parsed.blockRows:10;
+      $('blockCols').value=blockCols;$('blockRows').value=blockRows;
+      applyArray(parsed.map);
+      selected=0;$('selectedLabel').textContent='選択中：0（空白）';renderPalette();
+      say('編集データを読み込みました。');return;
+    }
+    applyArray(parsed);say('配列を読み込みました。未登録の番号には仮の色を割り当てました。');
+  }
+  $('loadArray').addEventListener('click',()=>{
+    try{loadText($('output').value);}catch(e){say(e.message);}
+  });
+  $('loadFile').addEventListener('change',async e=>{
+    const file=e.target.files?.[0];if(!file)return;
+    try{loadText(await file.text());}catch(err){say(err.message);}
+    e.target.value='';
+  });
+  // Touch drawing: paint the cell under the finger when a swipe ends.
+  const canvasScroll=document.querySelector('.canvas-scroll');
+  let touchMoved=false, touchStart=null, pinchStartDistance=0, pinchStartSize=cellSize;
+  let suppressCellClick=false;
+  const distance=(a,b)=>Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+  function cellAtPoint(x,y){
+    const el=document.elementFromPoint(x,y);
+    return el&&el.closest ? el.closest('#mapGrid .cell') : null;
+  }
+  canvasScroll.addEventListener('touchstart',e=>{
+    if(e.touches.length===2){
+      touchStart=null;pinchStartDistance=distance(e.touches[0],e.touches[1]);pinchStartSize=cellSize;
+      e.preventDefault();return;
+    }
+    if(e.touches.length===1){
+      const t=e.touches[0];touchStart={x:t.clientX,y:t.clientY};touchMoved=false;
+    }
+  },{passive:false});
+  canvasScroll.addEventListener('touchmove',e=>{
+    if(e.touches.length===2){
+      const d=distance(e.touches[0],e.touches[1]);
+      if(pinchStartDistance>0){
+        cellSize=Math.max(10,Math.min(60,Math.round(pinchStartSize*d/pinchStartDistance)));
+        renderMap();
+      }
+      e.preventDefault();return;
+    }
+    if(e.touches.length===1&&touchStart){
+      const t=e.touches[0];
+      if(Math.hypot(t.clientX-touchStart.x,t.clientY-touchStart.y)>7)touchMoved=true;
+      if(touchMoved)e.preventDefault();
+    }
+  },{passive:false});
+  canvasScroll.addEventListener('touchend',e=>{
+    if(e.touches.length===0&&touchStart){
+      const changed=e.changedTouches[0];
+      const cell=cellAtPoint(changed.clientX,changed.clientY);
+      if(cell){
+        const index=[...$('mapGrid').children].indexOf(cell);
+        if(index>=0)paint(index%cols,Math.floor(index/cols));
+        suppressCellClick=true;setTimeout(()=>{suppressCellClick=false;},500);
+      }
+      touchStart=null;touchMoved=false;pinchStartDistance=0;
+      e.preventDefault();
+    }else if(e.touches.length<2){pinchStartDistance=0;}
+  },{passive:false});
+  canvasScroll.addEventListener('touchcancel',()=>{touchStart=null;touchMoved=false;pinchStartDistance=0;});
+  renderPalette();renderMap();updateOutput();
+})();
+</script>
+</body>
+</html>
