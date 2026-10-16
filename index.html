@@ -23,9 +23,9 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px soli
 .tile{min-width:60px;min-height:62px;padding:5px;display:grid;place-items:center;gap:3px;border:2px solid var(--border);border-radius:9px}
 .tile.selected{outline:3px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
 .swatch{width:28px;height:25px;border:1px solid #7778;border-radius:4px}
-.canvas-scroll{overflow:auto;max-width:100%;padding:3px;touch-action:none;overscroll-behavior:contain}
-.grid{display:grid;gap:1px;background:var(--border);border:1px solid var(--border);width:max-content;min-width:100%;touch-action:manipulation}
-.cell{width:var(--cell-size,30px);height:var(--cell-size,30px);border:0;border-radius:0;padding:0;display:grid;place-items:center;font-size:11px;font-weight:650;overflow:hidden;color:#111;user-select:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent}.cell.block-right{border-right:3px solid var(--block-line)}.cell.block-bottom{border-bottom:3px solid var(--block-line)}
+.canvas-scroll{overflow:auto;max-width:100%;padding:3px;touch-action:none;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;position:relative}
+.grid{display:grid;gap:1px;background:var(--border);border:1px solid var(--border);width:max-content;min-width:100%;touch-action:none;transform:translateZ(0);}
+.cell{width:var(--cell-size,30px);height:var(--cell-size,30px);border:0;border-radius:0;padding:0;display:grid;place-items:center;font-size:11px;font-weight:650;overflow:hidden;color:#111;user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent}.cell.block-right{border-right:3px solid var(--block-line)}.cell.block-bottom{border-bottom:3px solid var(--block-line)}
 textarea{display:block;width:100%;min-height:210px;padding:10px;border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--text);font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;resize:vertical}
 .status{min-height:1.4em;color:var(--muted);font-size:.85rem}
 .anchor-wrap{display:grid;gap:6px;align-content:start}
@@ -41,20 +41,7 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
 <main>
 <header><h1>タイルマップエディター</h1><div class="small">タイル作成・マップ編集・配列の保存と読み込み</div></header>
 <section class="panel">
-<h2>1. タイルを作成・登録</h2>
-<div class="row">
-<label>タイル番号<input id="tileNumber" type="number" min="1" max="999999" value="1"></label>
-<label>色<input id="tileColor" type="color" value="#9b9b9b"></label>
-<button class="primary" id="registerTile">登録／色を更新</button>
-</div>
-<p class="small">番号0は空白です。タイル番号は1以上の整数を使います。</p>
-<hr>
-<div class="row" style="justify-content:space-between"><h2 style="margin:0">2. パレット</h2><span id="selectedLabel" class="small">選択中：0（空白）</span></div>
-<div id="palette" class="palette" style="margin-top:10px"></div>
-<p class="small">タイルを選び、右側のマスをタップして塗ります。</p>
-</section>
-<section class="panel">
-<h2>3. キャンバスサイズ</h2>
+<h2>マップサイズ・基準点</h2>
 <div class="row">
 <label>列数<input id="cols" type="number" min="1" max="100" value="18"></label>
 <label>行数<input id="rows" type="number" min="1" max="100" value="10"></label>
@@ -85,16 +72,32 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
 <p class="small">ここで指定するのは1ブロックあたりのマス数です。例：マップ54列×30行、ブロック18列×10行なら、左上から横3×縦3の9ブロックに分かれます。</p>
 <div id="blockInfo" class="status" aria-live="polite">ブロック：横1 × 縦1</div>
 <hr>
+<h2>タイルを作成・登録</h2>
+<div class="row">
+<label>タイル番号<input id="tileNumber" type="number" min="1" max="999999" value="1"></label>
+<label>色<input id="tileColor" type="color" value="#9b9b9b"></label>
+<button class="primary" id="registerTile">登録／色を更新</button>
+</div>
+<p class="small">番号0は空白です。タイル番号は1以上の整数を使います。</p>
+<div class="row" style="justify-content:space-between"><h2 style="margin:8px 0 0">パレット</h2><span id="selectedLabel" class="small">選択中：0（空白）</span></div>
+<div id="palette" class="palette" style="margin-top:10px"></div>
+<p class="small">タイルを選び、マップのマスをタップして塗ります。</p>
+<hr>
 <div class="row" style="justify-content:space-between;align-items:center">
 <h2 style="margin:0">マップ</h2><span id="dimensions" class="small">18列 × 10行</span>
 </div>
 <div class="canvas-scroll" style="margin-top:10px"><div id="mapGrid" class="grid" aria-label="タイルマップ"></div></div>
+<div class="row" style="margin-top:12px;align-items:center">
+<span class="small" style="font-weight:650">一本指スワイプ</span>
+<button id="gestureModeButton" class="primary" type="button" aria-pressed="false">スクロール</button>
+<span id="gestureModeHint" class="small">一本指で画面移動。マスのタップで塗ります。</span>
+</div>
 <div class="row" style="margin-top:12px">
 <button id="undo">1手戻す</button><button id="clear">全マスを空白にする</button><button id="refresh" class="primary">配列を更新</button>
 </div>
 </section>
 <section class="panel output-panel">
-<h2>4. 配列の出力・保存・読み込み</h2>
+<h2>配列の出力・保存・読み込み</h2>
 <p class="small">配列だけのテキストも読み込めます。保存用ファイルにはサイズ・タイル色・配置も含めるため、後日そのまま再開できます。</p>
 <textarea id="output" spellcheck="false" aria-label="マップ配列"></textarea>
 <div class="row" style="margin-top:10px">
@@ -152,12 +155,16 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
       box.append(b);
     });
   }
+  function updateGridScale(){
+    const grid=$('mapGrid');
+    grid.style.setProperty('--cell-size',`${cellSize}px`);
+    grid.style.gridTemplateColumns=`repeat(${cols}, var(--cell-size))`;
+    // Resize cells without rebuilding thousands of cell elements.
+    grid.style.width=`${cols*cellSize+(cols-1)+2}px`;
+  }
   function renderMap(){
     const grid=$('mapGrid');grid.replaceChildren();
-    grid.style.setProperty('--cell-size',`${cellSize}px`);
-    grid.style.gridTemplateColumns=`repeat(${cols}, ${cellSize}px)`;
-    // Fixed-width cells keep separator lines aligned; large maps scroll horizontally.
-    grid.style.width=`${cols*cellSize+(cols-1)+2}px`;
+    updateGridScale();
     map.forEach((row,y)=>row.forEach((n,x)=>{
       const b=document.createElement('button');b.type='button';b.className='cell';
       if((x+1)<cols&&(x+1)%blockCols===0)b.classList.add('block-right');
@@ -312,53 +319,126 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
     try{loadText(await file.text());}catch(err){say(err.message);}
     e.target.value='';
   });
-  // Touch drawing: paint the cell under the finger when a swipe ends.
+  // One-finger mode: scroll the viewport or paint while dragging. Two fingers always zoom.
   const canvasScroll=document.querySelector('.canvas-scroll');
-  let touchMoved=false, touchStart=null, pinchStartDistance=0, pinchStartSize=cellSize;
+  let singleFingerMode='scroll';
+  bindTap($('gestureModeButton'),()=>{
+    singleFingerMode=singleFingerMode==='scroll'?'paint':'scroll';
+    const paintMode=singleFingerMode==='paint';
+    $('gestureModeButton').textContent=paintMode?'スワイプ塗り':'スクロール';
+    $('gestureModeButton').setAttribute('aria-pressed',String(paintMode));
+    $('gestureModeHint').textContent=paintMode
+      ?'一本指でなぞって塗ります。画面移動するときは「スクロール」に切り替えます。'
+      :'一本指で画面移動。マスのタップで塗ります。';
+    say('一本指操作を「'+(paintMode?'スワイプ塗り':'スクロール')+'」に切り替えました。');
+  });
+  let gestureMode='idle';
+  let touchStart=null, lastTouch=null, touchMoved=false, touchStartCell=null, lastPaintedIndex=-1;
+  let pinchStartDistance=0, pinchStartSize=cellSize, pinchStartMid=null;
   let suppressCellClick=false;
   const distance=(a,b)=>Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+  const midpoint=(a,b)=>({x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2});
   function cellAtPoint(x,y){
     const el=document.elementFromPoint(x,y);
     return el&&el.closest ? el.closest('#mapGrid .cell') : null;
   }
+  function paintAtPoint(x,y){
+    const cell=cellAtPoint(x,y);
+    if(!cell)return;
+    const index=Array.prototype.indexOf.call(cell.parentElement.children,cell);
+    if(index<0||index===lastPaintedIndex)return;
+    lastPaintedIndex=index;
+    paint(index%cols,Math.floor(index/cols));
+  }
+  function suppressSyntheticClick(){
+    suppressCellClick=true;
+    setTimeout(()=>{suppressCellClick=false;},450);
+  }
   canvasScroll.addEventListener('touchstart',e=>{
-    if(e.touches.length===2){
-      touchStart=null;pinchStartDistance=distance(e.touches[0],e.touches[1]);pinchStartSize=cellSize;
+    if(e.touches.length>=2){
+      gestureMode='pinch';touchStart=null;touchMoved=true;touchStartCell=null;lastPaintedIndex=-1;
+      pinchStartDistance=distance(e.touches[0],e.touches[1])||1;
+      pinchStartSize=cellSize;pinchStartMid=midpoint(e.touches[0],e.touches[1]);
       e.preventDefault();return;
     }
     if(e.touches.length===1){
-      const t=e.touches[0];touchStart={x:t.clientX,y:t.clientY};touchMoved=false;
+      const t=e.touches[0];
+      if(gestureMode==='pinch'){
+        // After a pinch, continue moving the viewport with the remaining finger.
+        gestureMode='pan';touchStart={x:t.clientX,y:t.clientY};lastTouch={x:t.clientX,y:t.clientY};touchMoved=true;touchStartCell=null;return;
+      }
+      gestureMode='pending';touchStart={x:t.clientX,y:t.clientY};lastTouch={x:t.clientX,y:t.clientY};
+      touchStartCell=cellAtPoint(t.clientX,t.clientY);touchMoved=false;lastPaintedIndex=-1;
     }
   },{passive:false});
   canvasScroll.addEventListener('touchmove',e=>{
-    if(e.touches.length===2){
-      const d=distance(e.touches[0],e.touches[1]);
-      if(pinchStartDistance>0){
-        cellSize=Math.max(10,Math.min(60,Math.round(pinchStartSize*d/pinchStartDistance)));
-        renderMap();
+    if(e.touches.length>=2&&gestureMode==='pinch'){
+      const t1=e.touches[0],t2=e.touches[1];
+      const d=distance(t1,t2);
+      const nextSize=Math.max(10,Math.min(60,Math.round(pinchStartSize*d/pinchStartDistance)));
+      if(nextSize!==cellSize){
+        const oldSize=cellSize;
+        const mid=midpoint(t1,t2);
+        const rect=canvasScroll.getBoundingClientRect();
+        const px=mid.x-rect.left-canvasScroll.clientLeft;
+        const py=mid.y-rect.top-canvasScroll.clientTop;
+        const oldContentX=canvasScroll.scrollLeft+px;
+        const oldContentY=canvasScroll.scrollTop+py;
+        cellSize=nextSize;
+        updateGridScale();
+        const scale=cellSize/oldSize;
+        canvasScroll.scrollLeft=Math.max(0,oldContentX*scale-px);
+        canvasScroll.scrollTop=Math.max(0,oldContentY*scale-py);
       }
       e.preventDefault();return;
     }
-    if(e.touches.length===1&&touchStart){
+    if(e.touches.length===1&&lastTouch&&gestureMode!=='pinch'){
       const t=e.touches[0];
-      if(Math.hypot(t.clientX-touchStart.x,t.clientY-touchStart.y)>7)touchMoved=true;
-      if(touchMoved)e.preventDefault();
+      const dx=t.clientX-lastTouch.x,dy=t.clientY-lastTouch.y;
+      if(!touchMoved&&touchStart&&Math.hypot(t.clientX-touchStart.x,t.clientY-touchStart.y)>7){
+        touchMoved=true;
+        if(singleFingerMode==='paint'){
+          gestureMode='paint';
+          if(touchStartCell){
+            const index=Array.prototype.indexOf.call(touchStartCell.parentElement.children,touchStartCell);
+            if(index>=0){lastPaintedIndex=index;paint(index%cols,Math.floor(index/cols));}
+          }
+        }else gestureMode='pan';
+      }
+      if(touchMoved){
+        if(gestureMode==='paint')paintAtPoint(t.clientX,t.clientY);
+        else if(gestureMode==='pan'){
+          canvasScroll.scrollLeft-=dx;canvasScroll.scrollTop-=dy;
+        }
+        e.preventDefault();
+      }
+      lastTouch={x:t.clientX,y:t.clientY};
     }
   },{passive:false});
   canvasScroll.addEventListener('touchend',e=>{
+    if(gestureMode==='pinch'){
+      if(e.touches.length===1){
+        const t=e.touches[0];gestureMode='pan';touchStart={x:t.clientX,y:t.clientY};lastTouch={x:t.clientX,y:t.clientY};touchMoved=true;touchStartCell=null;
+      }else if(e.touches.length===0){gestureMode='idle';touchStart=null;lastTouch=null;touchStartCell=null;pinchStartDistance=0;}
+      suppressSyntheticClick();e.preventDefault();return;
+    }
     if(e.touches.length===0&&touchStart){
       const changed=e.changedTouches[0];
-      const cell=cellAtPoint(changed.clientX,changed.clientY);
-      if(cell){
-        const index=[...$('mapGrid').children].indexOf(cell);
-        if(index>=0)paint(index%cols,Math.floor(index/cols));
-        suppressCellClick=true;setTimeout(()=>{suppressCellClick=false;},500);
+      if(!touchMoved){
+        const cell=cellAtPoint(changed.clientX,changed.clientY);
+        if(cell){
+          const index=cell.parentElement?Array.prototype.indexOf.call(cell.parentElement.children,cell):-1;
+          if(index>=0)paint(index%cols,Math.floor(index/cols));
+        }
       }
-      touchStart=null;touchMoved=false;pinchStartDistance=0;
+      suppressSyntheticClick();
+      gestureMode='idle';touchStart=null;lastTouch=null;touchStartCell=null;touchMoved=false;lastPaintedIndex=-1;pinchStartDistance=0;
       e.preventDefault();
-    }else if(e.touches.length<2){pinchStartDistance=0;}
+    }
   },{passive:false});
-  canvasScroll.addEventListener('touchcancel',()=>{touchStart=null;touchMoved=false;pinchStartDistance=0;});
+  canvasScroll.addEventListener('touchcancel',()=>{
+    gestureMode='idle';touchStart=null;lastTouch=null;touchStartCell=null;touchMoved=false;lastPaintedIndex=-1;pinchStartDistance=0;
+  });
   renderPalette();renderMap();updateOutput();
 })();
 </script>
