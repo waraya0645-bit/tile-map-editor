@@ -83,6 +83,11 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
 <p class="small">番号0は空白です。タイル番号は1以上の整数を使います。</p>
 <div class="row" style="justify-content:space-between"><h2 style="margin:8px 0 0">パレット</h2><span id="selectedLabel" class="small">選択中：0（空白）</span></div>
 <div id="palette" class="palette" style="margin-top:10px"></div>
+<div class="row" style="margin-top:10px;align-items:center">
+<button id="savePalette" type="button">パレットをJSON保存</button>
+<label>パレットファイルを読み込む<input id="loadPalette" type="file" accept=".json,application/json"></label>
+</div>
+<p class="small">登録したパレットはこのブラウザにも自動保存されます。別の端末で使う場合はJSONファイルに保存して読み込んでください。</p>
 <p class="small">タイルを選び、マップのマスをタップして塗ります。</p>
 <hr>
 <div class="row" style="justify-content:space-between;align-items:center">
@@ -143,6 +148,37 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
     });
   }
   const mapText=()=>map.map(row=>'['+row.join(',')+']').join(',\n');
+  const PALETTE_STORAGE_KEY='tile-map-editor-palette-v1';
+  function validPaletteColor(color){
+    return typeof color==='string' && (
+      /^#[0-9a-f]{6}$/i.test(color) ||
+      /^hsl\(\d+(?:\.\d+)?\s+\d+%\s+\d+%\)$/i.test(color)
+    );
+  }
+  function paletteFileData(){
+    return {format:'tile-map-palette',version:1,palette:[...palette.entries()].map(([id,v])=>({id,color:v.color}))};
+  }
+  function savePaletteToStorage(){
+    try{
+      localStorage.setItem(PALETTE_STORAGE_KEY,JSON.stringify(paletteFileData()));
+      return true;
+    }catch(error){return false;}
+  }
+  function restorePaletteFromStorage(){
+    try{
+      const raw=localStorage.getItem(PALETTE_STORAGE_KEY);
+      if(!raw)return false;
+      const saved=JSON.parse(raw);
+      if(saved?.format!=='tile-map-palette'||!Array.isArray(saved.palette))return false;
+      const restored=new Map([[0,{color:'#ffffff'}]]);
+      saved.palette.forEach(tile=>{
+        if(Number.isSafeInteger(tile.id)&&tile.id>=1&&tile.id<=999999&&validPaletteColor(tile.color))
+          restored.set(tile.id,{color:tile.color});
+      });
+      palette=restored;
+      return true;
+    }catch(error){return false;}
+  }
   function updateOutput(){ $('output').value=mapText(); }
   function renderPalette(){
     const box=$('palette');box.replaceChildren();
@@ -201,7 +237,9 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
     if(!Number.isSafeInteger(n)||n<1||n>999999){say('タイル番号は1〜999999の整数にしてください。');return;}
     palette.set(n,{color:$('tileColor').value});selected=n;
     $('selectedLabel').textContent='選択中：'+label(n);
-    renderPalette();renderMap();say(`タイル${n}を登録しました。`);
+    const saved=savePaletteToStorage();
+    renderPalette();renderMap();
+    say(saved?`タイル${n}を登録しました。パレットは自動保存されました。`:`タイル${n}を登録しました。ブラウザへの自動保存ができなかったため、JSON保存を使ってください。`);
   });
   document.querySelectorAll('.anchor-option').forEach(button=>{
     bindTap(button,()=>{
@@ -265,6 +303,28 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
     setTimeout(()=>URL.revokeObjectURL(url),1500);
   }
   $('saveTxt').addEventListener('click',()=>download('mapData.txt',mapText(),'text/plain;charset=utf-8'));
+  $('savePalette').addEventListener('click',()=>{
+    download('tile-map-palette.json',JSON.stringify(paletteFileData(),null,2),'application/json;charset=utf-8');
+    say('パレットをJSONファイルに保存しました。');
+  });
+  $('loadPalette').addEventListener('change',async e=>{
+    const file=e.target.files?.[0];if(!file)return;
+    try{
+      const saved=JSON.parse(await file.text());
+      if(!saved||!['tile-map-palette','tile-map-editor'].includes(saved.format)||!Array.isArray(saved.palette))
+        throw new Error('パレット形式のJSONファイルを選んでください。');
+      let loaded=0;
+      saved.palette.forEach(tile=>{
+        if(Number.isSafeInteger(tile.id)&&tile.id>=1&&tile.id<=999999&&validPaletteColor(tile.color)){
+          palette.set(tile.id,{color:tile.color});loaded++;
+        }
+      });
+      const stored=savePaletteToStorage();
+      renderPalette();renderMap();
+      say(stored?`${loaded}個のタイルをパレットに読み込み、自動保存しました。`:`${loaded}個のタイルを読み込みました。ブラウザへの自動保存はできませんでした。`);
+    }catch(error){say(error.message||'パレットを読み込めませんでした。');}
+    e.target.value='';
+  });
   $('saveProject').addEventListener('click',()=>{
     const project={format:'tile-map-editor',version:1,cols,rows,blockCols,blockRows,palette:[...palette.entries()].map(([id,v])=>({id,color:v.color})),map};
     download('tile-map-project.json',JSON.stringify(project,null,2),'application/json;charset=utf-8');
@@ -280,6 +340,7 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
       return n;
     }));
     clean.flat().forEach(n=>{if(!palette.has(n))palette.set(n,{color:defaultColor(n)});});
+    savePaletteToStorage();
     cols=nc;rows=nr;map=clean;history=[];
     $('cols').value=cols;$('rows').value=rows;renderPalette();renderMap();updateOutput();
   }
@@ -299,7 +360,7 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
       if(!Array.isArray(parsed.palette))throw new Error('保存データのパレットが不正です。');
       const newPalette=new Map([[0,{color:'#ffffff'}]]);
       parsed.palette.forEach(t=>{
-        if(Number.isSafeInteger(t.id)&&t.id>=1&&t.id<=999999&&typeof t.color==='string'&&/^#[0-9a-f]{6}$/i.test(t.color))
+        if(Number.isSafeInteger(t.id)&&t.id>=1&&t.id<=999999&&validPaletteColor(t.color))
           newPalette.set(t.id,{color:t.color});
       });
       palette=newPalette;
@@ -441,7 +502,9 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
   canvasScroll.addEventListener('touchcancel',()=>{
     gestureMode='idle';touchStart=null;lastTouch=null;touchStartCell=null;touchMoved=false;lastPaintedIndex=-1;pinchStartDistance=0;
   });
+  const paletteRestored=restorePaletteFromStorage();
   renderPalette();renderMap();updateOutput();
+  if(paletteRestored)say('前回保存したパレットを復元しました。');
 })();
 </script>
 </body>
