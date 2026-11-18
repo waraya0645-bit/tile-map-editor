@@ -37,6 +37,15 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px soli
 .pen-size-controls{display:flex;align-items:center;gap:9px;margin-top:7px}
 .pen-size-controls input[type=range]{flex:1;min-width:80px;width:100%}
 .pen-size-button{width:40px;min-width:40px;height:38px;padding:4px;font-size:1.25rem;font-weight:700;line-height:1}
+.map-viewport-container{position:relative}
+.minimap-window{position:absolute;z-index:20;top:8px;right:8px;width:230px;height:190px;min-width:160px;min-height:140px;max-width:calc(100% - 16px);max-height:calc(100% - 16px);display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--border);border-radius:11px;background:var(--panel);box-shadow:0 5px 22px #0005;touch-action:none;user-select:none}
+.minimap-window[hidden]{display:none!important}
+.minimap-header{height:34px;min-height:34px;padding:4px 6px 4px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bg);border-bottom:1px solid var(--border);cursor:move;touch-action:none}
+.minimap-title{font-size:.78rem;font-weight:700;white-space:nowrap}
+.minimap-close{width:28px;height:26px;min-width:28px;padding:0;font-size:1rem;line-height:1}
+.minimap-content{position:relative;display:flex;flex:1;min-height:0;padding:8px}
+.minimap-canvas{display:block;width:100%;height:100%;min-width:0;min-height:0}
+.minimap-resize{position:absolute;right:0;bottom:0;width:24px;height:24px;cursor:nwse-resize;touch-action:none;background:linear-gradient(135deg,transparent 0 44%,var(--muted) 45% 51%,transparent 52% 62%,var(--muted) 63% 69%,transparent 70%);}
 .grid{display:grid;gap:1px;background:var(--border);border:1px solid var(--border);width:max-content;min-width:100%;touch-action:none;transform:translateZ(0);}
 .cell{width:var(--cell-size,30px);height:var(--cell-size,30px);border:0;border-radius:0;padding:0;display:grid;place-items:center;font-size:11px;font-weight:650;overflow:hidden;color:#111;user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent;position:relative;background:var(--panel)}
 .cell-layer{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none}
@@ -122,14 +131,24 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
 <p class="small">リストの上ほど背面、下ほど前面です。追加したレイヤーは編集中のレイヤーの下に入ります。タイル番号0は透明で、下のレイヤーが見えます。</p>
 <hr>
 <div class="row" style="justify-content:space-between;align-items:center">
-<h2 style="margin:0">マップ</h2><span id="dimensions" class="small">18列 × 10行</span>
+<h2 style="margin:0">マップ</h2><div class="row" style="align-items:center;gap:8px"><span id="dimensions" class="small">18列 × 10行</span><button id="toggleMinimap" type="button" aria-pressed="false">参照ウィンドウを表示</button></div>
 </div>
 <div class="map-size-controls">
 <label>表示幅 <span id="viewportWidthValue" class="map-size-value">100%</span><input id="viewportWidth" type="range" min="25" max="100" step="1" value="100"></label>
 <label>表示高さ <span id="viewportHeightValue" class="map-size-value">360px</span><input id="viewportHeight" type="range" min="120" max="1200" step="10" value="360"></label>
 <button id="resetViewport" type="button">表示範囲をリセット</button>
 </div>
-<div class="map-viewport-container"><div class="canvas-scroll"><div id="mapGrid" class="grid" aria-label="タイルマップ"></div></div></div>
+<div class="map-viewport-container">
+  <div class="canvas-scroll"><div id="mapGrid" class="grid" aria-label="タイルマップ"></div></div>
+  <div id="minimapWindow" class="minimap-window" hidden>
+    <div id="minimapHeader" class="minimap-header">
+      <span class="minimap-title">マップ全体・表示範囲</span>
+      <button id="closeMinimap" class="minimap-close" type="button" aria-label="参照ウィンドウを閉じる">×</button>
+    </div>
+    <div class="minimap-content"><canvas id="minimapCanvas" class="minimap-canvas" aria-label="マップ全体の縮小表示と現在の表示範囲"></canvas></div>
+    <div id="minimapResize" class="minimap-resize" role="separator" aria-label="参照ウィンドウの大きさを変更" tabindex="0" title="ドラッグして大きさを変更"></div>
+  </div>
+</div>
 <div class="palette-under-map">
 <div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">パレット</h2><span id="selectedLabel" class="small">選択中：0（透明）</span></div>
 <div id="palette" class="palette"></div>
@@ -237,7 +256,7 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
     const data=layers.map((layer,index)=>`scene${jsProperty(names[index])} = [\n${layer.map.map(row=>'['+row.join(',')+']').join(',\n')}\n];`).join('\n\n');
     return head+'\n'+data;
   }
-  function updateOutput(){$('output').value=mapText();}
+  function updateOutput(){$('output').value=mapText();scheduleMiniMapRender();}
   function setOutputMode(mode){
     outputMode=mode;const unity=mode==='unity';
     $('normalMode').classList.toggle('primary',!unity);$('unityMode').classList.toggle('primary',unity);
@@ -325,7 +344,7 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
   function renderMap(){
     const grid=$('mapGrid');grid.replaceChildren();updateGridScale();
     for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){const b=document.createElement('button');b.type='button';renderCell(x,y,b);grid.append(b);}
-    $('dimensions').textContent=`${cols}列 × ${rows}行（${cols*rows}マス）`;updateBlockInfo();
+    $('dimensions').textContent=`${cols}列 × ${rows}行（${cols*rows}マス）`;updateBlockInfo();scheduleMiniMapRender();
   }
   function updateBlockInfo(){const h=Math.ceil(cols/blockCols),v=Math.ceil(rows/blockRows);$('blockInfo').textContent=`ブロック：横${h} × 縦${v} = ${h*v}個${(cols%blockCols||rows%blockRows)?'（端の余りは小さいブロック）':''}`;}
   function beginStroke(){
@@ -511,6 +530,145 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
     say('マップの表示範囲を初期値に戻しました。');
   });
   applyViewportSize();
+
+  // Mini-map overlay: full layered map plus the current visible viewport.
+  let minimapRenderQueued=false;
+  let minimapInitialized=false;
+  function scheduleMiniMapRender(){
+    const mini=$('minimapWindow');
+    if(!mini||mini.hidden||minimapRenderQueued)return;
+    minimapRenderQueued=true;
+    requestAnimationFrame(()=>{minimapRenderQueued=false;drawMiniMap();});
+  }
+  function drawMiniMap(){
+    const mini=$('minimapWindow');
+    if(mini.hidden)return;
+    const canvas=$('minimapCanvas');
+    const width=Math.max(1,Math.floor(canvas.clientWidth));
+    const height=Math.max(1,Math.floor(canvas.clientHeight));
+    if(canvas.width!==width)canvas.width=width;
+    if(canvas.height!==height)canvas.height=height;
+    const ctx=canvas.getContext('2d');
+    if(!ctx)return;
+    ctx.clearRect(0,0,width,height);
+    ctx.fillStyle='#d9dde4';
+    ctx.fillRect(0,0,width,height);
+    const scale=Math.min(width/cols,height/rows);
+    const mapWidth=cols*scale,mapHeight=rows*scale;
+    const offsetX=(width-mapWidth)/2,offsetY=(height-mapHeight)/2;
+    // Draw layers back-to-front, preserving transparency and opacity.
+    for(const layer of layers){
+      if(layer.opacity<=0)continue;
+      ctx.globalAlpha=layer.opacity/100;
+      for(let y=0;y<rows;y++){
+        for(let x=0;x<cols;x++){
+          const tileNumber=layer.map[y][x];
+          if(tileNumber===0)continue;
+          ctx.fillStyle=palette.get(tileNumber)?.color||'#ff00ff';
+          ctx.fillRect(offsetX+x*scale,offsetY+y*scale,Math.max(scale,0.35),Math.max(scale,0.35));
+        }
+      }
+    }
+    ctx.globalAlpha=1;
+    // Convert the scroll viewport from screen coordinates into map cells.
+    const gridRect=$('mapGrid').getBoundingClientRect();
+    const scrollRect=canvasScroll.getBoundingClientRect();
+    const clipLeft=scrollRect.left+canvasScroll.clientLeft;
+    const clipTop=scrollRect.top+canvasScroll.clientTop;
+    const pitch=cellSize+1;
+    const left=Math.max(0,Math.min(cols,(clipLeft-gridRect.left-1)/pitch));
+    const top=Math.max(0,Math.min(rows,(clipTop-gridRect.top-1)/pitch));
+    const right=Math.max(left,Math.min(cols,(clipLeft+canvasScroll.clientWidth-gridRect.left-1)/pitch));
+    const bottom=Math.max(top,Math.min(rows,(clipTop+canvasScroll.clientHeight-gridRect.top-1)/pitch));
+    const rectX=offsetX+left*scale,rectY=offsetY+top*scale;
+    const rectW=Math.max(1,(right-left)*scale),rectH=Math.max(1,(bottom-top)*scale);
+    ctx.fillStyle='rgba(53,106,230,0.13)';
+    ctx.fillRect(rectX,rectY,rectW,rectH);
+    ctx.lineWidth=3;ctx.strokeStyle='rgba(0,0,0,0.85)';ctx.strokeRect(rectX,rectY,rectW,rectH);
+    ctx.lineWidth=1.5;ctx.strokeStyle='#ffffff';ctx.strokeRect(rectX,rectY,rectW,rectH);
+  }
+  const minimapWindow=$('minimapWindow');
+  const minimapParent=document.querySelector('.map-viewport-container');
+  const minimapHeader=$('minimapHeader');
+  const minimapResize=$('minimapResize');
+  function setMiniMapVisible(visible){
+    minimapWindow.hidden=!visible;
+    $('toggleMinimap').setAttribute('aria-pressed',String(visible));
+    $('toggleMinimap').textContent=visible?'参照ウィンドウを隠す':'参照ウィンドウを表示';
+    if(visible){
+      if(!minimapInitialized){
+        const maxWidth=Math.max(160,minimapParent.clientWidth-16);
+        const maxHeight=Math.max(140,minimapParent.clientHeight-16);
+        minimapWindow.style.width=Math.min(230,maxWidth)+'px';
+        minimapWindow.style.height=Math.min(190,maxHeight)+'px';
+        minimapWindow.style.left='auto';minimapWindow.style.right='8px';minimapWindow.style.top='8px';
+        minimapInitialized=true;
+      }
+      scheduleMiniMapRender();
+    }
+  }
+  $('toggleMinimap').addEventListener('click',()=>setMiniMapVisible(minimapWindow.hidden));
+  $('closeMinimap').addEventListener('click',()=>setMiniMapVisible(false));
+  let minimapPointerAction=null;
+  function clampMiniMapPosition(left,top){
+    const maxLeft=Math.max(0,minimapParent.clientWidth-minimapWindow.offsetWidth);
+    const maxTop=Math.max(0,minimapParent.clientHeight-minimapWindow.offsetHeight);
+    return {left:Math.max(0,Math.min(maxLeft,left)),top:Math.max(0,Math.min(maxTop,top))};
+  }
+  minimapHeader.addEventListener('pointerdown',event=>{
+    if(event.target.closest('button'))return;
+    event.preventDefault();event.stopPropagation();
+    const parentRect=minimapParent.getBoundingClientRect();
+    const winRect=minimapWindow.getBoundingClientRect();
+    minimapPointerAction={type:'move',pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,left:winRect.left-parentRect.left,top:winRect.top-parentRect.top};
+    minimapWindow.style.left=minimapPointerAction.left+'px';
+    minimapWindow.style.top=minimapPointerAction.top+'px';
+    minimapWindow.style.right='auto';
+    minimapHeader.setPointerCapture(event.pointerId);
+  });
+  minimapResize.addEventListener('pointerdown',event=>{
+    event.preventDefault();event.stopPropagation();
+    minimapPointerAction={type:'resize',pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,width:minimapWindow.offsetWidth,height:minimapWindow.offsetHeight};
+    minimapResize.setPointerCapture(event.pointerId);
+  });
+  function moveMiniMapPointer(event){
+    if(!minimapPointerAction||event.pointerId!==minimapPointerAction.pointerId)return;
+    event.preventDefault();event.stopPropagation();
+    const dx=event.clientX-minimapPointerAction.startX,dy=event.clientY-minimapPointerAction.startY;
+    if(minimapPointerAction.type==='move'){
+      const pos=clampMiniMapPosition(minimapPointerAction.left+dx,minimapPointerAction.top+dy);
+      minimapWindow.style.left=pos.left+'px';minimapWindow.style.top=pos.top+'px';
+    }else{
+      const maxWidth=Math.max(160,minimapParent.clientWidth-16),maxHeight=Math.max(140,minimapParent.clientHeight-16);
+      const width=Math.max(160,Math.min(maxWidth,minimapPointerAction.width+dx));
+      const height=Math.max(140,Math.min(maxHeight,minimapPointerAction.height+dy));
+      minimapWindow.style.width=width+'px';minimapWindow.style.height=height+'px';
+      scheduleMiniMapRender();
+    }
+  }
+  function endMiniMapPointer(event){
+    if(!minimapPointerAction||event.pointerId!==minimapPointerAction.pointerId)return;
+    minimapPointerAction=null;scheduleMiniMapRender();
+  }
+  minimapHeader.addEventListener('pointermove',moveMiniMapPointer);
+  minimapHeader.addEventListener('pointerup',endMiniMapPointer);
+  minimapHeader.addEventListener('pointercancel',endMiniMapPointer);
+  minimapResize.addEventListener('pointermove',moveMiniMapPointer);
+  minimapResize.addEventListener('pointerup',endMiniMapPointer);
+  minimapResize.addEventListener('pointercancel',endMiniMapPointer);
+  minimapResize.addEventListener('keydown',event=>{
+    if(!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.key))return;
+    event.preventDefault();
+    const maxWidth=Math.max(160,minimapParent.clientWidth-16),maxHeight=Math.max(140,minimapParent.clientHeight-16);
+    let width=minimapWindow.offsetWidth,height=minimapWindow.offsetHeight;
+    if(event.key==='ArrowLeft')width=Math.max(160,width-10);
+    if(event.key==='ArrowRight')width=Math.min(maxWidth,width+10);
+    if(event.key==='ArrowUp')height=Math.max(140,height-10);
+    if(event.key==='ArrowDown')height=Math.min(maxHeight,height+10);
+    minimapWindow.style.width=width+'px';minimapWindow.style.height=height+'px';scheduleMiniMapRender();
+  });
+  canvasScroll.addEventListener('scroll',scheduleMiniMapRender,{passive:true});
+  window.addEventListener('resize',scheduleMiniMapRender);
 
   // Touch gestures: one finger paints, two parallel fingers scroll, two-finger tap undoes.
   let gestureMode='idle',touchStart=null,lastTouch=null,touchMoved=false,touchStartCell=null,lastPaintedIndex=-1;
