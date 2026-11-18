@@ -63,8 +63,8 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
 <section class="panel">
 <h2>マップサイズ・基準点</h2>
 <div class="row">
-<label>列数<input id="cols" type="number" min="1" max="100" value="18"></label>
-<label>行数<input id="rows" type="number" min="1" max="100" value="10"></label>
+<label>列数<input id="cols" type="number" min="1" max="500" value="18"></label>
+<label>行数<input id="rows" type="number" min="1" max="500" value="10"></label>
 <button id="resize" class="primary">サイズを変更</button>
 <div class="anchor-wrap">
 <span class="small">サイズ変更時の基準点</span>
@@ -81,12 +81,12 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
 </div>
 </div>
 </div>
-<p class="small">最大100×100マス。選んだ基準点の位置を保ってサイズを変更します。拡張時は反対側にマスを追加し、縮小時は反対側からマスを削除します。</p>
+<p class="small">最大500×500マス（最大250,000マス）。選んだ基準点の位置を保ってサイズを変更します。拡張時は反対側にマスを追加し、縮小時は反対側からマスを削除します。</p>
 <hr>
 <h2>ブロック分け・区切り線</h2>
 <div class="row">
-<label>ブロックの列数<input id="blockCols" type="number" min="1" max="100" value="18"></label>
-<label>ブロックの行数<input id="blockRows" type="number" min="1" max="100" value="10"></label>
+<label>ブロックの列数<input id="blockCols" type="number" min="1" max="500" value="18"></label>
+<label>ブロックの行数<input id="blockRows" type="number" min="1" max="500" value="10"></label>
 <button id="applyBlocks" class="primary">区切り線を適用</button>
 </div>
 <p class="small">ここで指定するのは1ブロックあたりのマス数です。例：マップ54列×30行、ブロック18列×10行なら、左上から横3×縦3の9ブロックに分かれます。</p>
@@ -172,7 +172,7 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
   let activeStroke=null;
   let copiedLayer=null;
   let outputMode='normal';
-  const MAX_DIM=100, MAX_CELLS=10000;
+  const MAX_DIM=500, MAX_CELLS=250000;
   const PALETTE_STORAGE_KEY='tile-map-editor-palette-v1';
   const say=msg=>$('status').textContent=msg;
   const label=n=>n===0?'0（透明）':String(n);
@@ -339,7 +339,7 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
   }));
   $('resize').addEventListener('click',()=>{
     commitStroke();const nc=Number($('cols').value),nr=Number($('rows').value);
-    if(!Number.isInteger(nc)||!Number.isInteger(nr)||nc<1||nr<1||nc>MAX_DIM||nr>MAX_DIM||nc*nr>MAX_CELLS){say('列数・行数はそれぞれ1〜100、合計10000マス以内にしてください。');return;}
+    if(!Number.isInteger(nc)||!Number.isInteger(nr)||nc<1||nr<1||nc>MAX_DIM||nr>MAX_DIM||nc*nr>MAX_CELLS){say('列数・行数はそれぞれ1〜500、合計250,000マス以内にしてください。');return;}
     const dx=resizeAnchorX==='west'?0:resizeAnchorX==='east'?nc-cols:Math.floor((nc-cols)/2);
     const dy=resizeAnchorY==='north'?0:resizeAnchorY==='south'?nr-rows:Math.floor((nr-rows)/2);
     layers.forEach(layer=>{const next=Array.from({length:nr},()=>Array(nc).fill(0));for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){const nx=x+dx,ny=y+dy;if(nx>=0&&nx<nc&&ny>=0&&ny<nr)next[ny][nx]=layer.map[y][x];}layer.map=next;});
@@ -347,7 +347,7 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
     const anchor=document.querySelector('.anchor-option[aria-pressed="true"]');const anchorName=anchor?anchor.getAttribute('aria-label').replace('を基準',''):'中央';say(`キャンバスを${cols}列×${rows}行に変更しました。基準点：${anchorName}。`);
   });
   $('applyBlocks').addEventListener('click',()=>{
-    commitStroke();const bc=Number($('blockCols').value),br=Number($('blockRows').value);if(!Number.isInteger(bc)||!Number.isInteger(br)||bc<1||br<1||bc>MAX_DIM||br>MAX_DIM){say('ブロックの列数・行数はそれぞれ1〜100の整数にしてください。');return;}
+    commitStroke();const bc=Number($('blockCols').value),br=Number($('blockRows').value);if(!Number.isInteger(bc)||!Number.isInteger(br)||bc<1||br<1||bc>MAX_DIM||br>MAX_DIM){say('ブロックの列数・行数はそれぞれ1〜500の整数にしてください。');return;}
     blockCols=bc;blockRows=br;renderMap();say(`区切り線を適用しました。1ブロックは${blockCols}列×${blockRows}行です。`);
   });
   function undoLastStroke(){
@@ -377,7 +377,7 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
   function defaultColor(n){const hue=(n*137.508)%360;return `hsl(${hue} 55% 68%)`;}
   function cleanMap(data){
     if(!Array.isArray(data)||!data.length||!data.every(r=>Array.isArray(r)&&r.length===data[0].length&&r.length>0))throw new Error('配列は、同じ長さの行が並ぶ二次元配列にしてください。');
-    const nr=data.length,nc=data[0].length;if(nr>MAX_DIM||nc>MAX_DIM||nr*nc>MAX_CELLS)throw new Error('読み込み可能な上限は100×100マスです。');
+    const nr=data.length,nc=data[0].length;if(nr>MAX_DIM||nc>MAX_DIM||nr*nc>MAX_CELLS)throw new Error('読み込み可能な上限は500×500マス（最大250,000マス）です。');
     return data.map(row=>row.map(n=>{if(!Number.isSafeInteger(n)||n<0||n>999999)throw new Error('タイル番号は0〜999999の整数にしてください。');return n;}));
   }
   function importLayers(layerData,opts={}){
