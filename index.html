@@ -38,14 +38,14 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px soli
 .pen-size-controls input[type=range]{flex:1;min-width:80px;width:100%}
 .pen-size-button{width:40px;min-width:40px;height:38px;padding:4px;font-size:1.25rem;font-weight:700;line-height:1}
 .map-viewport-container{position:relative}
-.minimap-window{position:absolute;z-index:20;top:8px;right:8px;width:230px;height:190px;min-width:160px;min-height:140px;max-width:calc(100% - 16px);max-height:calc(100% - 16px);display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--border);border-radius:11px;background:var(--panel);box-shadow:0 5px 22px #0005;touch-action:none;user-select:none}
+.minimap-window{position:absolute;z-index:20;top:8px;right:8px;width:230px;height:auto;min-width:0;min-height:0;max-width:calc(100% - 16px);display:block;aspect-ratio:1 / 1;overflow:hidden;border:1px solid var(--border);border-radius:11px;background:var(--panel);box-shadow:0 5px 22px #0005;touch-action:none;user-select:none}
 .minimap-window[hidden]{display:none!important}
-.minimap-header{height:34px;min-height:34px;padding:4px 6px 4px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bg);border-bottom:1px solid var(--border);cursor:move;touch-action:none}
+.minimap-header{position:absolute;z-index:2;top:0;left:0;right:0;height:34px;padding:4px 6px 4px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bg);border-bottom:1px solid var(--border);cursor:move;touch-action:none}
 .minimap-title{font-size:.78rem;font-weight:700;white-space:nowrap}
 .minimap-close{width:28px;height:26px;min-width:28px;padding:0;font-size:1rem;line-height:1}
-.minimap-content{position:relative;display:flex;flex:1;min-height:0;padding:8px}
+.minimap-content{position:absolute;inset:0;display:block;padding:0}
 .minimap-canvas{display:block;width:100%;height:100%;min-width:0;min-height:0}
-.minimap-resize{position:absolute;right:0;bottom:0;width:24px;height:24px;cursor:nwse-resize;touch-action:none;background:linear-gradient(135deg,transparent 0 44%,var(--muted) 45% 51%,transparent 52% 62%,var(--muted) 63% 69%,transparent 70%);}
+.minimap-resize{position:absolute;z-index:3;right:0;bottom:0;width:24px;height:24px;cursor:nwse-resize;touch-action:none;background:linear-gradient(135deg,transparent 0 44%,var(--muted) 45% 51%,transparent 52% 62%,var(--muted) 63% 69%,transparent 70%);}
 .grid{display:grid;gap:1px;background:var(--border);border:1px solid var(--border);width:max-content;min-width:100%;touch-action:none;transform:translateZ(0);}
 .cell{width:var(--cell-size,30px);height:var(--cell-size,30px);border:0;border-radius:0;padding:0;display:grid;place-items:center;font-size:11px;font-weight:650;overflow:hidden;color:#111;user-select:none;touch-action:none;-webkit-tap-highlight-color:transparent;position:relative;background:var(--panel)}
 .cell-layer{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none}
@@ -131,7 +131,7 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
 <p class="small">リストの上ほど背面、下ほど前面です。追加したレイヤーは編集中のレイヤーの下に入ります。タイル番号0は透明で、下のレイヤーが見えます。</p>
 <hr>
 <div class="row" style="justify-content:space-between;align-items:center">
-<h2 style="margin:0">マップ</h2><div class="row" style="align-items:center;gap:8px"><span id="dimensions" class="small">18列 × 10行</span><button id="toggleMinimap" type="button" aria-pressed="false">参照ウィンドウを表示</button></div>
+<h2 style="margin:0">マップ</h2><div class="row" style="align-items:center;gap:8px"><span id="dimensions" class="small">18列 × 10行</span><label style="display:flex;align-items:center;gap:6px">背景色<input id="mapBackground" type="color" value="#ffffff" aria-label="マップの背景色"></label><button id="toggleMinimap" type="button" aria-pressed="false">参照ウィンドウを表示</button></div>
 </div>
 <div class="map-size-controls">
 <label>表示幅 <span id="viewportWidthValue" class="map-size-value">100%</span><input id="viewportWidth" type="range" min="25" max="100" step="1" value="100"></label>
@@ -193,6 +193,9 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
 <script>
 (() => {
   const $ = id => document.getElementById(id);
+  const themePanelColor=getComputedStyle(document.documentElement).getPropertyValue('--panel').trim()||'#ffffff';
+  const defaultMapBackgroundColor=/^#[0-9a-f]{3}$/i.test(themePanelColor)?'#'+themePanelColor.slice(1).split('').map(ch=>ch+ch).join(''):themePanelColor;
+  let mapBackgroundColor=defaultMapBackgroundColor;
   let cols=18, rows=10, selected=0;
   let penSize=1;
   let blockCols=18, blockRows=10;
@@ -325,7 +328,7 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
   $('pasteLayer').disabled=true;
   function updateGridScale(){const grid=$('mapGrid');grid.style.setProperty('--cell-size',`${cellSize}px`);grid.style.gridTemplateColumns=`repeat(${cols}, var(--cell-size))`;grid.style.width=`${cols*cellSize+(cols-1)+2}px`;}
   function renderCell(x,y,b){
-    b.replaceChildren();b.className='cell';
+    b.replaceChildren();b.className='cell';b.style.background=mapBackgroundColor;
     if((x+1)<cols&&(x+1)%blockCols===0)b.classList.add('block-right');
     if((y+1)<rows&&(y+1)%blockRows===0)b.classList.add('block-bottom');
     const visibleTop=[...layers].reverse().find(layer=>layer.map[y][x]!==0&&layer.opacity>0);
@@ -344,7 +347,7 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
   function renderMap(){
     const grid=$('mapGrid');grid.replaceChildren();updateGridScale();
     for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){const b=document.createElement('button');b.type='button';renderCell(x,y,b);grid.append(b);}
-    $('dimensions').textContent=`${cols}列 × ${rows}行（${cols*rows}マス）`;updateBlockInfo();scheduleMiniMapRender();
+    $('dimensions').textContent=`${cols}列 × ${rows}行（${cols*rows}マス）`;updateBlockInfo();updateMiniMapAspectRatio();scheduleMiniMapRender();
   }
   function updateBlockInfo(){const h=Math.ceil(cols/blockCols),v=Math.ceil(rows/blockRows);$('blockInfo').textContent=`ブロック：横${h} × 縦${v} = ${h*v}個${(cols%blockCols||rows%blockRows)?'（端の余りは小さいブロック）':''}`;}
   function beginStroke(){
@@ -443,7 +446,7 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
     try{const saved=JSON.parse(await file.text());if(!saved||!['tile-map-palette','tile-map-editor'].includes(saved.format)||!Array.isArray(saved.palette))throw new Error('パレット形式のJSONファイルを選んでください。');let loaded=0;saved.palette.forEach(tile=>{if(Number.isSafeInteger(tile.id)&&tile.id>=1&&tile.id<=999999&&validPaletteColor(tile.color)){palette.set(tile.id,{color:tile.color});loaded++;}});const stored=savePaletteToStorage();renderPalette();renderMap();say(stored?`${loaded}個のタイルをパレットに読み込み、自動保存しました。`:`${loaded}個のタイルを読み込みました。ブラウザへの自動保存はできませんでした。`);}catch(error){say(error.message||'パレットを読み込めませんでした。');}e.target.value='';
   });
   $('saveProject').addEventListener('click',()=>{
-    const project={format:'tile-map-editor',version:2,cols,rows,blockCols,blockRows,activeLayerName:currentLayer().name,palette:[...palette.entries()].map(([id,v])=>({id,color:v.color})),layers:layers.map(layer=>({name:layer.name,opacity:layer.opacity,map:layer.map}))};
+    const project={format:'tile-map-editor',version:2,cols,rows,blockCols,blockRows,mapBackgroundColor,activeLayerName:currentLayer().name,palette:[...palette.entries()].map(([id,v])=>({id,color:v.color})),layers:layers.map(layer=>({name:layer.name,opacity:layer.opacity,map:layer.map}))};
     download('tile-map-project.json',JSON.stringify(project,null,2),'application/json;charset=utf-8');say('編集データ（全レイヤーを含む）を保存しました。');
   });
   function defaultColor(n){const hue=(n*137.508)%360;return `hsl(${hue} 55% 68%)`;}
@@ -493,6 +496,8 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
     if(parsed&&parsed.format==='tile-map-editor'){
       if(!Array.isArray(parsed.palette))throw new Error('保存データのパレットが不正です。');
       const newPalette=new Map([[0,{color:'#ffffff'}]]);parsed.palette.forEach(t=>{if(Number.isSafeInteger(t.id)&&t.id>=1&&t.id<=999999&&validPaletteColor(t.color))newPalette.set(t.id,{color:t.color});});palette=newPalette;
+      mapBackgroundColor=typeof parsed.mapBackgroundColor==='string'&&/^#[0-9a-f]{6}$/i.test(parsed.mapBackgroundColor)?parsed.mapBackgroundColor:defaultMapBackgroundColor;
+      $('mapBackground').value=mapBackgroundColor;
       blockCols=Number.isInteger(parsed.blockCols)&&parsed.blockCols>=1&&parsed.blockCols<=MAX_DIM?parsed.blockCols:18;blockRows=Number.isInteger(parsed.blockRows)&&parsed.blockRows>=1&&parsed.blockRows<=MAX_DIM?parsed.blockRows:10;
       $('blockCols').value=blockCols;$('blockRows').value=blockRows;
       if(Array.isArray(parsed.layers))importLayers(parsed.layers,{activeLayerName:parsed.activeLayerName});
@@ -531,6 +536,16 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
   });
   applyViewportSize();
 
+  $('mapBackground').value=mapBackgroundColor;
+  $('mapBackground').addEventListener('input',event=>{
+    const value=event.target.value;
+    if(!/^#[0-9a-f]{6}$/i.test(value))return;
+    mapBackgroundColor=value;
+    document.querySelectorAll('#mapGrid .cell').forEach(cell=>{cell.style.background=mapBackgroundColor;});
+    scheduleMiniMapRender();
+    say('マップの背景色を変更しました。');
+  });
+
   // Mini-map overlay: full layered map plus the current visible viewport.
   let minimapRenderQueued=false;
   let minimapInitialized=false;
@@ -551,7 +566,7 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
     const ctx=canvas.getContext('2d');
     if(!ctx)return;
     ctx.clearRect(0,0,width,height);
-    ctx.fillStyle='#d9dde4';
+    ctx.fillStyle=mapBackgroundColor;
     ctx.fillRect(0,0,width,height);
     const scale=Math.min(width/cols,height/rows);
     const mapWidth=cols*scale,mapHeight=rows*scale;
@@ -591,16 +606,30 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
   const minimapParent=document.querySelector('.map-viewport-container');
   const minimapHeader=$('minimapHeader');
   const minimapResize=$('minimapResize');
+  function miniMapAspect(){return cols/rows;}
+  function maxMiniMapWidth(){
+    const ratio=miniMapAspect();
+    return Math.max(1,Math.min(Math.max(1,minimapParent.clientWidth-16),Math.max(1,minimapParent.clientHeight-16)*ratio));
+  }
+  function updateMiniMapAspectRatio(){
+    minimapWindow.style.aspectRatio=`${cols} / ${rows}`;
+    if(!minimapInitialized)return;
+    const width=Math.max(1,Math.min(maxMiniMapWidth(),minimapWindow.offsetWidth||230));
+    minimapWindow.style.width=width+'px';
+    const pos=clampMiniMapPosition(minimapWindow.offsetLeft,minimapWindow.offsetTop);
+    minimapWindow.style.left=pos.left+'px';
+    minimapWindow.style.top=pos.top+'px';
+    minimapWindow.style.right='auto';
+  }
   function setMiniMapVisible(visible){
     minimapWindow.hidden=!visible;
     $('toggleMinimap').setAttribute('aria-pressed',String(visible));
     $('toggleMinimap').textContent=visible?'参照ウィンドウを隠す':'参照ウィンドウを表示';
     if(visible){
       if(!minimapInitialized){
-        const maxWidth=Math.max(160,minimapParent.clientWidth-16);
-        const maxHeight=Math.max(140,minimapParent.clientHeight-16);
+        minimapWindow.style.aspectRatio=`${cols} / ${rows}`;
+        const maxWidth=maxMiniMapWidth();
         minimapWindow.style.width=Math.min(230,maxWidth)+'px';
-        minimapWindow.style.height=Math.min(190,maxHeight)+'px';
         minimapWindow.style.left='auto';minimapWindow.style.right='8px';minimapWindow.style.top='8px';
         minimapInitialized=true;
       }
@@ -639,10 +668,15 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
       const pos=clampMiniMapPosition(minimapPointerAction.left+dx,minimapPointerAction.top+dy);
       minimapWindow.style.left=pos.left+'px';minimapWindow.style.top=pos.top+'px';
     }else{
-      const maxWidth=Math.max(160,minimapParent.clientWidth-16),maxHeight=Math.max(140,minimapParent.clientHeight-16);
-      const width=Math.max(160,Math.min(maxWidth,minimapPointerAction.width+dx));
-      const height=Math.max(140,Math.min(maxHeight,minimapPointerAction.height+dy));
-      minimapWindow.style.width=width+'px';minimapWindow.style.height=height+'px';
+      const ratio=miniMapAspect();
+      const widthFromX=minimapPointerAction.width+dx;
+      const widthFromY=(minimapPointerAction.height+dy)*ratio;
+      const desiredWidth=Math.abs(dx)>=Math.abs(dy*ratio)?widthFromX:widthFromY;
+      const width=Math.max(1,Math.min(maxMiniMapWidth(),desiredWidth));
+      minimapWindow.style.aspectRatio=`${cols} / ${rows}`;
+      minimapWindow.style.width=width+'px';
+      const pos=clampMiniMapPosition(minimapWindow.offsetLeft,minimapWindow.offsetTop);
+      minimapWindow.style.left=pos.left+'px';minimapWindow.style.top=pos.top+'px';
       scheduleMiniMapRender();
     }
   }
@@ -659,13 +693,18 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
   minimapResize.addEventListener('keydown',event=>{
     if(!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.key))return;
     event.preventDefault();
-    const maxWidth=Math.max(160,minimapParent.clientWidth-16),maxHeight=Math.max(140,minimapParent.clientHeight-16);
-    let width=minimapWindow.offsetWidth,height=minimapWindow.offsetHeight;
-    if(event.key==='ArrowLeft')width=Math.max(160,width-10);
-    if(event.key==='ArrowRight')width=Math.min(maxWidth,width+10);
-    if(event.key==='ArrowUp')height=Math.max(140,height-10);
-    if(event.key==='ArrowDown')height=Math.min(maxHeight,height+10);
-    minimapWindow.style.width=width+'px';minimapWindow.style.height=height+'px';scheduleMiniMapRender();
+    const ratio=miniMapAspect();
+    let width=minimapWindow.offsetWidth;
+    if(event.key==='ArrowLeft')width-=10;
+    if(event.key==='ArrowRight')width+=10;
+    if(event.key==='ArrowUp')width-=10*ratio;
+    if(event.key==='ArrowDown')width+=10*ratio;
+    width=Math.max(1,Math.min(maxMiniMapWidth(),width));
+    minimapWindow.style.aspectRatio=`${cols} / ${rows}`;
+    minimapWindow.style.width=width+'px';
+    const pos=clampMiniMapPosition(minimapWindow.offsetLeft,minimapWindow.offsetTop);
+    minimapWindow.style.left=pos.left+'px';minimapWindow.style.top=pos.top+'px';
+    scheduleMiniMapRender();
   });
   canvasScroll.addEventListener('scroll',scheduleMiniMapRender,{passive:true});
   window.addEventListener('resize',scheduleMiniMapRender);
