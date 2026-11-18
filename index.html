@@ -304,7 +304,7 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
     const title=layers.map(layer=>`${layer.name}:${layer.map[y][x]}`).join(' / ');
     b.title=`${y+1}行 ${x+1}列：${title}`;
     b.setAttribute('aria-label',`${y+1}行 ${x+1}列、前面のタイル番号${topNumber}`);
-    b.addEventListener('click',event=>{if(!suppressCellClick&&event.detail===0)paint(x,y);});
+    b.onclick=event=>{if(!suppressCellClick&&event.detail===0)paint(x,y);};
   }
   function renderMap(){
     const grid=$('mapGrid');grid.replaceChildren();updateGridScale();
@@ -353,7 +353,24 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
   function undoLastStroke(){
     commitStroke();const h=history.pop();if(!h){say('戻せる操作がありません。');return false;}
     const layer=layers.find(item=>item.id===h.layerId);
-    if(layer){for(let i=h.changes.length-1;i>=0;i--){const change=h.changes[i];if(change.y<rows&&change.x<cols)layer.map[change.y][change.x]=change.old;}renderMap();updateOutput();}
+    if(layer){
+      const changedCells=new Set();
+      for(let i=h.changes.length-1;i>=0;i--){
+        const change=h.changes[i];
+        if(change.y<rows&&change.x<cols){
+          layer.map[change.y][change.x]=change.old;
+          changedCells.add(change.y*cols+change.x);
+        }
+      }
+      // Only redraw cells changed by this undo. Rebuilding the whole grid
+      // resets the zoomed viewport's scroll position.
+      changedCells.forEach(index=>{
+        const x=index%cols,y=Math.floor(index/cols);
+        const cell=$('mapGrid').children[index];
+        if(cell)renderCell(x,y,cell);
+      });
+      updateOutput();
+    }
     say('直前の塗り操作を取り消しました。');return true;
   }
   $('undo').addEventListener('click',undoLastStroke);
