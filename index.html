@@ -40,9 +40,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px soli
 .map-viewport-container{position:relative}
 .minimap-window{position:absolute;z-index:20;top:8px;right:8px;width:230px;height:auto;min-width:0;min-height:0;max-width:calc(100% - 16px);display:block;aspect-ratio:1 / 1;overflow:hidden;border:1px solid var(--border);border-radius:11px;background:var(--panel);box-shadow:0 5px 22px #0005;touch-action:none;user-select:none}
 .minimap-window[hidden]{display:none!important}
-.minimap-header{position:absolute;z-index:2;top:0;left:0;right:0;height:34px;padding:4px 6px 4px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bg);border-bottom:1px solid var(--border);cursor:move;touch-action:none}
-.minimap-title{font-size:.78rem;font-weight:700;white-space:nowrap}
-.minimap-close{width:28px;height:26px;min-width:28px;padding:0;font-size:1rem;line-height:1}
+.minimap-header{position:absolute;z-index:2;top:0;left:0;right:0;height:34px;padding:4px 6px;display:flex;align-items:flex-start;justify-content:flex-end;background:transparent;border:0;cursor:move;touch-action:none}
+.minimap-close{width:28px;height:26px;min-width:28px;padding:0;font-size:1rem;line-height:1;pointer-events:auto}
 .minimap-content{position:absolute;inset:0;display:block;padding:0}
 .minimap-canvas{display:block;width:100%;height:100%;min-width:0;min-height:0}
 .minimap-resize{position:absolute;z-index:3;right:0;bottom:0;width:24px;height:24px;cursor:nwse-resize;touch-action:none;background:linear-gradient(135deg,transparent 0 44%,var(--muted) 45% 51%,transparent 52% 62%,var(--muted) 63% 69%,transparent 70%);}
@@ -142,7 +141,6 @@ hr{border:0;border-top:1px solid var(--border);margin:14px 0}
   <div class="canvas-scroll"><div id="mapGrid" class="grid" aria-label="タイルマップ"></div></div>
   <div id="minimapWindow" class="minimap-window" hidden>
     <div id="minimapHeader" class="minimap-header">
-      <span class="minimap-title">マップ全体・表示範囲</span>
       <button id="closeMinimap" class="minimap-close" type="button" aria-label="参照ウィンドウを閉じる">×</button>
     </div>
     <div class="minimap-content"><canvas id="minimapCanvas" class="minimap-canvas" aria-label="マップ全体の縮小表示と現在の表示範囲"></canvas></div>
