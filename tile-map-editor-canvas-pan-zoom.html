@@ -1,0 +1,785 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>タイルマップエディター</title>
+<style>
+:root{color-scheme:light dark;--bg:#f5f6f8;--panel:#fff;--text:#20242a;--muted:#68707b;--border:#d6dbe2;--accent:#356ae6;--block-line:#2b65d9}
+@media(prefers-color-scheme:dark){:root{--bg:#15171b;--panel:#22252b;--text:#edf0f5;--muted:#a9b0bb;--border:#424752;--accent:#7197ff;--block-line:#9bb7ff}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,sans-serif}
+main{max-width:1600px;margin:auto;padding:16px;display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+h1{font-size:1.35rem;margin:0}h2{font-size:1rem;margin:0 0 12px}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px;min-width:0}
+.row{display:flex;align-items:end;flex-wrap:wrap;gap:10px}.grow{flex:1}
+label{display:grid;gap:4px;font-size:.85rem;color:var(--muted)}
+input,button,textarea{font:inherit}input[type=number]{width:92px;min-width:0;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)}
+input[type=color]{width:48px;height:42px;padding:2px;border:1px solid var(--border);border-radius:8px;background:var(--bg)}
+input[type=file]{max-width:100%;font-size:.85rem}
+button{border:1px solid var(--border);border-radius:9px;padding:8px 12px;background:var(--panel);color:var(--text);cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+button.primary{background:var(--accent);color:white;border-color:var(--accent)}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid #7197ff;outline-offset:2px}
+.small{font-size:.82rem;color:var(--muted)}.palette{display:flex;gap:6px;flex-wrap:wrap}
+.tile{min-width:48px;min-height:48px;padding:4px;display:grid;place-items:center;gap:2px;border:2px solid var(--border);border-radius:8px}
+.tile.selected{outline:3px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+.swatch{width:24px;height:21px;border:1px solid #7778;border-radius:4px}
+.map-viewport-container{width:100%;min-width:0;container-type:inline-size;position:relative}
+.minimap-window{position:absolute;z-index:20;top:8px;right:8px;width:230px;height:auto;min-width:0;min-height:0;max-width:calc(100% - 16px);display:block;aspect-ratio:1 / 1;overflow:hidden;border:1px solid var(--border);border-radius:11px;background:var(--panel);box-shadow:0 5px 22px #0005;touch-action:none;user-select:none}
+.minimap-window[hidden]{display:none!important}
+.minimap-header{position:absolute;z-index:2;top:0;left:0;right:0;height:34px;padding:4px 6px;display:flex;align-items:flex-start;justify-content:flex-end;background:transparent;border:0;cursor:move;touch-action:none}
+.minimap-close{width:28px;height:26px;min-width:28px;padding:0;font-size:1rem;line-height:1;pointer-events:auto}
+.minimap-content{position:absolute;inset:0;display:block;padding:0}
+.minimap-canvas{display:block;width:100%;height:100%;min-width:0;min-height:0}
+.minimap-resize{position:absolute;z-index:3;right:0;bottom:0;width:24px;height:24px;cursor:nwse-resize;touch-action:none;background:linear-gradient(135deg,transparent 0 44%,var(--muted) 45% 51%,transparent 52% 62%,var(--muted) 63% 69%,transparent 70%)}
+.canvas-scroll{width:100%;height:360px;max-width:100%;overflow:auto;padding:0;touch-action:none;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;position:relative;resize:both}
+.map-size-controls{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:8px 0}
+.map-size-controls label{min-width:150px;flex:1}
+.map-size-controls input[type=range]{width:100%;max-width:240px}
+.map-size-value{font-variant-numeric:tabular-nums;color:var(--text);font-size:.82rem}
+.palette-under-map{margin-top:10px}
+.palette-under-map .palette{margin-top:6px}
+.pen-size-panel{margin-top:12px;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--bg)}
+.pen-size-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.88rem}
+.pen-size-value{font-variant-numeric:tabular-nums;font-weight:700;color:var(--text)}
+.pen-size-controls{display:flex;align-items:center;gap:9px;margin-top:7px}
+.pen-size-controls input[type=range]{flex:1;min-width:80px;width:100%}
+.pen-size-button{width:40px;min-width:40px;height:38px;padding:4px;font-size:1.25rem;font-weight:700;line-height:1}
+.canvas-scroll{padding:0;overflow:auto;position:relative;isolation:isolate;}
+.canvas-world{position:relative;pointer-events:none;min-width:100%;min-height:100%;}
+.map-canvas{position:absolute;z-index:1;left:0;top:0;display:block;width:100%;height:100%;touch-action:none;user-select:none;-webkit-tap-highlight-color:transparent;outline:none;}
+.map-canvas:focus-visible{outline:3px solid var(--accent);outline-offset:-3px}
+.map-canvas[aria-busy="true"]{cursor:progress}
+.zoom-controls{display:flex;align-items:center;gap:7px}
+.zoom-controls button{width:38px;min-width:38px;height:36px;padding:3px;font-size:1.2rem;font-weight:700}
+.zoom-value{min-width:58px;text-align:center;font-size:.82rem;font-variant-numeric:tabular-nums;color:var(--text)}
+.settings-panel,.map-panel{min-width:0}
+@media(min-width:900px){main{grid-template-columns:minmax(270px,.78fr) minmax(0,1.8fr);align-items:start}.settings-panel{grid-column:1;grid-row:2}.map-panel{grid-column:2;grid-row:2}header,.output-panel{grid-column:1/-1}.settings-panel{position:relative}.map-panel{position:relative}}
+@media(max-width:899px){main{grid-template-columns:minmax(0,1fr)}.settings-panel,.map-panel,.output-panel{grid-column:1}.settings-panel,.map-panel{grid-row:auto}}
+.layer-list{display:grid;gap:7px;margin-top:8px}
+.layer-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;align-items:center;padding:9px;border:1px solid var(--border);border-radius:10px;background:var(--bg)}
+.layer-item.active{border:2px solid var(--accent);padding:8px}
+.layer-main{display:grid;gap:6px;min-width:0}
+.layer-select{justify-self:start;padding:4px 9px;font-size:.82rem}
+.layer-name-label,.layer-opacity-label{display:flex;align-items:center;gap:7px;min-width:0;font-size:.78rem;color:var(--muted)}
+.layer-name{width:100%;min-width:0;padding:5px 7px;border:1px solid var(--border);border-radius:7px;background:var(--panel);color:var(--text)}
+.layer-opacity{width:min(180px,55%);min-width:60px}
+.layer-delete{font-size:.78rem;padding:6px 9px}
+.layer-active-tag{font-size:.72rem;color:var(--accent);font-weight:700}
+@media(max-width:420px){.layer-item{grid-template-columns:minmax(0,1fr) auto}.layer-opacity-label{flex-wrap:wrap}.layer-opacity{width:100%}}
+textarea{display:block;width:100%;min-height:210px;padding:10px;border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--text);font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;resize:vertical}
+.status{min-height:1.4em;color:var(--muted);font-size:.85rem}
+.anchor-wrap{display:grid;gap:6px;align-content:start}
+.anchor-grid{display:grid;grid-template-columns:repeat(3,58px);gap:5px}
+.anchor-option{width:58px;height:54px;padding:3px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;font-size:21px;line-height:1.1}
+.anchor-option span{font-size:11px;line-height:1.2}
+.anchor-option[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff;outline:2px solid var(--accent);outline-offset:1px}
+hr{border:0;border-top:1px solid var(--border);margin:14px 0}
+@media(max-width:699px){.canvas-scroll{scrollbar-width:none}.canvas-scroll::-webkit-scrollbar{display:none}}
+@media(max-width:699px){main{padding:10px}.panel{padding:11px}.zoom-controls{gap:5px}.zoom-controls button{width:34px;min-width:34px}}
+</style>
+</head>
+<body>
+<main>
+<header><h1>タイルマップエディター</h1><div class="small">タイル作成・マップ編集・配列の保存と読み込み</div></header>
+<section class="panel settings-panel">
+<h2>マップサイズ・基準点</h2>
+<div class="row">
+<label>列数<input id="cols" type="number" min="1" max="500" value="18"></label>
+<label>行数<input id="rows" type="number" min="1" max="500" value="10"></label>
+<button id="resize" class="primary">サイズを変更</button>
+<div class="anchor-wrap">
+<span class="small">サイズ変更時の基準点</span>
+<div class="anchor-grid" role="group" aria-label="サイズ変更時の基準点">
+<button type="button" class="anchor-option" data-x="west" data-y="north" aria-pressed="false" aria-label="左上を基準">↖<span>左上</span></button>
+<button type="button" class="anchor-option" data-x="center" data-y="north" aria-pressed="false" aria-label="上を基準">↑<span>上</span></button>
+<button type="button" class="anchor-option" data-x="east" data-y="north" aria-pressed="false" aria-label="右上を基準">↗<span>右上</span></button>
+<button type="button" class="anchor-option" data-x="west" data-y="center" aria-pressed="false" aria-label="左を基準">←<span>左</span></button>
+<button type="button" class="anchor-option" data-x="center" data-y="center" aria-pressed="true" aria-label="中央を基準">●<span>中央</span></button>
+<button type="button" class="anchor-option" data-x="east" data-y="center" aria-pressed="false" aria-label="右を基準">→<span>右</span></button>
+<button type="button" class="anchor-option" data-x="west" data-y="south" aria-pressed="false" aria-label="左下を基準">↙<span>左下</span></button>
+<button type="button" class="anchor-option" data-x="center" data-y="south" aria-pressed="false" aria-label="下を基準">↓<span>下</span></button>
+<button type="button" class="anchor-option" data-x="east" data-y="south" aria-pressed="false" aria-label="右下を基準">↘<span>右下</span></button>
+</div>
+</div>
+</div>
+<p class="small">最大500×500マス（最大250,000マス）。選んだ基準点の位置を保ってサイズを変更します。拡張時は反対側にマスを追加し、縮小時は反対側からマスを削除します。</p>
+<hr>
+<h2>ブロック分け・区切り線</h2>
+<div class="row">
+<label>ブロックの列数<input id="blockCols" type="number" min="1" max="500" value="18"></label>
+<label>ブロックの行数<input id="blockRows" type="number" min="1" max="500" value="10"></label>
+<button id="applyBlocks" class="primary">区切り線を適用</button>
+</div>
+<p class="small">ここで指定するのは1ブロックあたりのマス数です。例：マップ54列×30行、ブロック18列×10行なら、左上から横3×縦3の9ブロックに分かれます。</p>
+<div id="blockInfo" class="status" aria-live="polite">ブロック：横1 × 縦1</div>
+<hr>
+<h2>タイルを作成・登録</h2>
+<div class="row">
+<label>タイル番号<input id="tileNumber" type="number" min="1" max="999999" value="1"></label>
+<label>色<input id="tileColor" type="color" value="#9b9b9b"></label>
+<button class="primary" id="registerTile">登録／色を更新</button>
+</div>
+<p class="small">番号0は透明です。透明なマスからは下のレイヤーが見えます。タイル番号は1以上の整数を使います。</p>
+<p class="small" style="margin:8px 0 4px">パレットの保存・読み込み</p>
+<div class="row" style="margin-top:4px;align-items:center">
+<button id="savePalette" type="button">パレットをJSON保存</button>
+<label>パレットファイルを読み込む<input id="loadPalette" type="file" accept=".json,application/json"></label>
+</div>
+<p class="small" style="margin:4px 0 8px">登録したパレットはこのブラウザにも自動保存されます。別の端末で使う場合はJSONファイルに保存して読み込んでください。</p>
+<hr>
+<h2>レイヤー</h2>
+<div class="row" style="margin-bottom:8px;align-items:center">
+<button id="addLayer" class="primary" type="button">レイヤーを追加</button>
+<button id="copyLayer" type="button">コピー</button>
+<button id="pasteLayer" type="button">ペースト</button>
+</div>
+<div id="layerList" class="layer-list" aria-label="レイヤーリスト"></div>
+<p class="small">リストの上ほど背面、下ほど前面です。追加したレイヤーは編集中のレイヤーの下に入ります。タイル番号0は透明で、下のレイヤーが見えます。</p>
+</section>
+<section class="panel map-panel">
+<div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap">
+<h2 style="margin:0">マップ</h2><div class="row" style="align-items:center;gap:8px;flex-wrap:wrap"><span id="dimensions" class="small">18列 × 10行</span><div class="zoom-controls" aria-label="マップの拡大・縮小"><button id="zoomOut" type="button" aria-label="縮小">−</button><span id="zoomValue" class="zoom-value">1.00×</span><button id="zoomIn" type="button" aria-label="拡大">＋</button></div><label style="display:flex;align-items:center;gap:6px">背景色<input id="mapBackground" type="color" value="#ffffff" aria-label="マップの背景色"></label><button id="toggleMinimap" type="button" aria-pressed="false">参照ウィンドウを表示</button></div>
+</div>
+<div class="map-size-controls">
+<label>表示幅 <span id="viewportWidthValue" class="map-size-value">100%</span><input id="viewportWidth" type="range" min="25" max="100" step="1" value="100"></label>
+<label>表示高さ <span id="viewportHeightValue" class="map-size-value">360px</span><input id="viewportHeight" type="range" min="120" max="1200" step="10" value="360"></label>
+<button id="resetViewport" type="button">表示範囲をリセット</button>
+</div>
+<div class="map-viewport-container"><div class="canvas-scroll"><div id="canvasWorld" class="canvas-world" aria-hidden="true"></div><canvas id="mapCanvas" class="map-canvas" tabindex="0" role="application" aria-label="タイルマップ。矢印キーで移動し、Enterまたはスペースで塗ります"></canvas></div><div id="minimapWindow" class="minimap-window" hidden><div id="minimapHeader" class="minimap-header"><button id="closeMinimap" class="minimap-close" type="button" aria-label="参照ウィンドウを閉じる">×</button></div><div class="minimap-content"><canvas id="minimapCanvas" class="minimap-canvas" aria-label="マップ全体の縮小表示と現在の表示範囲"></canvas></div><div id="minimapResize" class="minimap-resize" role="separator" aria-label="参照ウィンドウの大きさを変更" tabindex="0" title="ドラッグして大きさを変更"></div></div></div>
+<div class="palette-under-map">
+<div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">パレット</h2><span id="selectedLabel" class="small">選択中：0（透明）</span></div>
+<div id="palette" class="palette"></div>
+<div class="pen-size-panel"><div class="pen-size-heading"><strong>ペンの太さ</strong><span id="penSizeValue" class="pen-size-value">1マス</span></div><div class="pen-size-controls"><button id="penSizeDecrease" class="pen-size-button" type="button" aria-label="ペンを1段階細くする">−</button><input id="penSize" type="range" min="1" max="20" step="1" value="1" aria-label="ペンの太さ"><button id="penSizeIncrease" class="pen-size-button" type="button" aria-label="ペンを1段階太くする">＋</button></div><p class="small" style="margin:5px 0 0">指定した太さの正方形ブラシで塗ります。</p></div>
+</div>
+<p class="small">マップはタップ／クリックで塗り、指1本またはマウスのドラッグで連続して塗れます。2本指の中点を動かすとスクロールし、指の間隔を変えると拡大・縮小します。両方を同時に操作できます。2本指でタップすると直前の塗り操作を取り消します。</p>
+<div class="row" style="margin-top:12px">
+<button id="undo">1回戻す</button><button id="clear">全マスを空白にする</button><button id="refresh" class="primary" title="現在のマップから出力欄を作り直します">出力欄を再生成</button>
+</div>
+</section>
+<section class="panel output-panel">
+<h2>配列の出力・保存・読み込み</h2>
+<p class="small">出力形式を切り替えて、表示中の配列をコピー・.txt保存できます。読み込みは通常形式とUnity形式の両方に対応しています。編集内容は基本的に自動反映されます。「出力欄を再生成」は、現在のマップから出力欄を作り直すボタンです。</p>
+<div class="row" style="margin:10px 0">
+<span class="small">出力形式：</span>
+<button id="normalMode" class="primary" type="button" aria-pressed="true">通常モード</button>
+<button id="unityMode" type="button" aria-pressed="false">Unityモード</button>
+</div>
+<textarea id="output" spellcheck="false" aria-label="マップ配列"></textarea>
+<div class="row" style="margin-top:10px">
+<button id="copy" class="primary">コピー</button>
+<button id="saveTxt">.txt保存</button>
+<button id="saveProject">編集データを保存</button>
+</div>
+<hr>
+<div class="row">
+<label class="grow">ファイルを読み込む<input id="loadFile" type="file" accept=".txt,.json,text/plain,application/json"></label>
+<button id="loadArray">入力欄の配列を読み込む</button>
+</div>
+<p class="small">編集データのJSON、または「[0,1,0], [0,0,1]」のような配列を読み込めます。</p>
+<div id="status" class="status" role="status" aria-live="polite">準備完了</div>
+</section>
+</main>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const themePanelColor=getComputedStyle(document.documentElement).getPropertyValue('--panel').trim()||'#ffffff';
+  const defaultMapBackgroundColor=/^#[0-9a-f]{3}$/i.test(themePanelColor)?'#'+themePanelColor.slice(1).split('').map(ch=>ch+ch).join(''):themePanelColor;
+  let mapBackgroundColor=defaultMapBackgroundColor;
+  let cols=18, rows=10, selected=0;
+  let penSize=1;
+  let blockCols=18, blockRows=10;
+  let cellSize=30;
+  let resizeAnchorX='center', resizeAnchorY='center';
+  let palette=new Map([[0,{color:'#ffffff'}]]);
+  let nextLayerId=2;
+  const makeEmptyMap=()=>Array.from({length:rows},()=>Array(cols).fill(0));
+  let layers=[{id:1,name:'',map:makeEmptyMap(),opacity:100}];
+  let activeLayerId=1;
+  let history=[];
+  let activeStroke=null;
+  let copiedLayer=null;
+  let outputMode='normal';
+  const MAX_DIM=500, MAX_CELLS=250000;
+  const PALETTE_STORAGE_KEY='tile-map-editor-palette-v1';
+  const say=msg=>$('status').textContent=msg;
+  const label=n=>n===0?'0（透明）':String(n);
+  const currentLayer=()=>layers.find(layer=>layer.id===activeLayerId)||layers[0];
+  const activeIndex=()=>Math.max(0,layers.findIndex(layer=>layer.id===activeLayerId));
+  function bindTap(element, action){
+    let lastTouch=0;
+    element.addEventListener('touchend', event=>{event.preventDefault();lastTouch=Date.now();action(event);},{passive:false});
+    element.addEventListener('click', event=>{if(Date.now()-lastTouch<800){event.preventDefault();return;}action(event);});
+  }
+  function validPaletteColor(color){
+    return typeof color==='string' && (/^#[0-9a-f]{6}$/i.test(color)||/^hsl\(\d+(?:\.\d+)?\s+\d+%\s+\d+%\)$/i.test(color));
+  }
+  function paletteFileData(){return {format:'tile-map-palette',version:1,palette:[...palette.entries()].map(([id,v])=>({id,color:v.color}))};}
+  function savePaletteToStorage(){try{localStorage.setItem(PALETTE_STORAGE_KEY,JSON.stringify(paletteFileData()));return true;}catch(error){return false;}}
+  function restorePaletteFromStorage(){
+    try{
+      const raw=localStorage.getItem(PALETTE_STORAGE_KEY);if(!raw)return false;
+      const saved=JSON.parse(raw);if(saved?.format!=='tile-map-palette'||!Array.isArray(saved.palette))return false;
+      const restored=new Map([[0,{color:'#ffffff'}]]);
+      saved.palette.forEach(tile=>{if(Number.isSafeInteger(tile.id)&&tile.id>=1&&tile.id<=999999&&validPaletteColor(tile.color))restored.set(tile.id,{color:tile.color});});
+      palette=restored;return true;
+    }catch(error){return false;}
+  }
+  function jsProperty(name){return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)?'.'+name:'['+JSON.stringify(name)+']';}
+  function outputLayerNames(){
+    const used=new Set(layers.map(layer=>layer.name.trim()).filter(Boolean));
+    let fallbackIndex=1;
+    return layers.map(layer=>{
+      const name=layer.name.trim();
+      if(name)return name;
+      let fallback;
+      do{fallback='layer'+fallbackIndex++;}while(used.has(fallback));
+      used.add(fallback);
+      return fallback;
+    });
+  }
+  function mapText(mode=outputMode){
+    const names=outputLayerNames();
+    if(mode==='unity'){
+      const result={width:cols,height:rows};
+      layers.forEach((layer,index)=>{result[names[index]]=layer.map.map(row=>row.join(','));});
+      return JSON.stringify(result,null,2);
+    }
+    const head=`const width = ${cols};\nconst height = ${rows};`;
+    const data=layers.map((layer,index)=>`scene${jsProperty(names[index])} = [\n${layer.map.map(row=>'['+row.join(',')+']').join(',\n')}\n];`).join('\n\n');
+    return head+'\n'+data;
+  }
+  function updateOutput(){$('output').value=mapText();scheduleMiniMapRender(true);}
+  function setOutputMode(mode){
+    outputMode=mode;const unity=mode==='unity';
+    $('normalMode').classList.toggle('primary',!unity);$('unityMode').classList.toggle('primary',unity);
+    $('normalMode').setAttribute('aria-pressed',String(!unity));$('unityMode').setAttribute('aria-pressed',String(unity));
+    updateOutput();say(unity?'Unityモードに切り替えました。':'通常モードに切り替えました。');
+  }
+  $('normalMode').addEventListener('click',()=>setOutputMode('normal'));
+  $('unityMode').addEventListener('click',()=>setOutputMode('unity'));
+  function renderPalette(){
+    const box=$('palette');box.replaceChildren();
+    [...palette.keys()].sort((a,b)=>a-b).forEach(n=>{
+      const b=document.createElement('button');b.type='button';b.className='tile'+(n===selected?' selected':'');
+      b.setAttribute('aria-label','タイル '+label(n));
+      const sw=document.createElement('span');sw.className='swatch';sw.style.background=palette.get(n).color;if(n===0)sw.style.background='linear-gradient(135deg,#fff 0 45%,#bbb 45% 55%,#fff 55%)';
+      const tx=document.createElement('span');tx.textContent=n;tx.style.fontSize='11px';b.append(sw,tx);
+      bindTap(b,()=>{commitStroke();selected=n;$('selectedLabel').textContent='選択中：'+label(n);renderPalette();});box.append(b);
+    });
+  }
+  function renderLayers(){
+    const box=$('layerList');box.replaceChildren();
+    layers.forEach((layer,index)=>{
+      const item=document.createElement('div');item.className='layer-item'+(layer.id===activeLayerId?' active':'');
+      const main=document.createElement('div');main.className='layer-main';
+      const select=document.createElement('button');select.type='button';select.className='layer-select';select.textContent=`${index+1}. ${layer.name || '（名前なし）'}`;
+      select.setAttribute('aria-pressed',String(layer.id===activeLayerId));
+      select.addEventListener('click',()=>{commitStroke();activeLayerId=layer.id;renderLayers();updateOutput();say(`レイヤー「${layer.name || '（名前なし）'}」を編集中です。`);});
+      const tag=document.createElement('span');tag.className='layer-active-tag';tag.textContent=layer.id===activeLayerId?'編集中':'';select.append(' ',tag);
+      const nameLabel=document.createElement('label');nameLabel.className='layer-name-label';nameLabel.append('名前');
+      const nameInput=document.createElement('input');nameInput.className='layer-name';nameInput.type='text';nameInput.value=layer.name;nameInput.maxLength=40;nameInput.setAttribute('aria-label',`${layer.name}のレイヤー名`);
+      nameInput.addEventListener('click',e=>e.stopPropagation());
+      nameInput.addEventListener('change',()=>{
+        const next=nameInput.value.trim();
+        if(next&&layers.some(other=>other.id!==layer.id&&other.name.trim()===next)){nameInput.value=layer.name;say('同じ名前のレイヤーが既にあります。');return;}
+        layer.name=next;renderLayers();updateOutput();say(`レイヤー名を「${next}」に変更しました。`);
+      });
+      nameLabel.append(nameInput);
+      const opacityLabel=document.createElement('label');opacityLabel.className='layer-opacity-label';
+      const opacityText=document.createElement('span');opacityText.textContent='透明度';
+      const slider=document.createElement('input');slider.className='layer-opacity';slider.type='range';slider.min='0';slider.max='100';slider.step='1';slider.value=String(layer.opacity);slider.setAttribute('aria-label',`${layer.name}の透明度`);
+      const percent=document.createElement('span');percent.textContent=layer.opacity+'%';
+      slider.addEventListener('input',()=>{layer.opacity=Number(slider.value);percent.textContent=layer.opacity+'%';renderMap();});
+      opacityLabel.append(opacityText,slider,percent);
+      main.append(select,nameLabel,opacityLabel);
+      const del=document.createElement('button');del.type='button';del.className='layer-delete';del.textContent='削除';del.disabled=layers.length===1;
+      del.addEventListener('click',()=>deleteLayer(layer.id));
+      item.append(main,del);box.append(item);
+    });
+  }
+  function addLayer(){
+    commitStroke();const index=activeIndex(),layer={id:nextLayerId++,name:'',map:makeEmptyMap(),opacity:100};
+    layers.splice(index+1,0,layer);activeLayerId=layer.id;renderLayers();renderMap();updateOutput();say('空欄のレイヤーを追加しました。');
+  }
+  $('addLayer').addEventListener('click',addLayer);
+  function deleteLayer(id){
+    if(layers.length<=1){say('レイヤーは最低1個必要です。');return;}
+    const index=layers.findIndex(layer=>layer.id===id);if(index<0)return;
+    commitStroke();const [removed]=layers.splice(index,1);history=history.filter(entry=>entry.layerId!==id);
+    if(activeLayerId===id)activeLayerId=layers[Math.min(index,layers.length-1)].id;
+    renderLayers();renderMap();updateOutput();say(removed.name?`レイヤー「${removed.name}」を削除しました。`:'レイヤーを削除しました。');
+  }
+  $('copyLayer').addEventListener('click',()=>{commitStroke();copiedLayer={map:currentLayer().map.map(row=>row.slice()),name:currentLayer().name,opacity:currentLayer().opacity};$('pasteLayer').disabled=false;say(currentLayer().name?`レイヤー「${currentLayer().name}」をコピーしました。`:'レイヤーをコピーしました。');});
+  $('pasteLayer').addEventListener('click',()=>{
+    if(!copiedLayer){say('先にコピーするレイヤーを選んでください。');return;}
+    commitStroke();const layer=currentLayer();layer.map=copiedLayer.map.map(row=>row.slice());layer.opacity=copiedLayer.opacity;history=history.filter(entry=>entry.layerId!==layer.id);renderLayers();renderMap();updateOutput();say(layer.name?`コピーした内容をレイヤー「${layer.name}」に貼り付けました。`:'コピーした内容をレイヤーに貼り付けました。');
+  });
+  $('pasteLayer').disabled=true;
+  const canvasScroll=document.querySelector('.canvas-scroll');
+  const canvasWorld=$('canvasWorld');
+  const mapCanvas=$('mapCanvas');
+  const mapContext=mapCanvas.getContext('2d',{alpha:false});
+  let canvasRenderQueued=false;
+  let cursorX=0,cursorY=0;
+  const MAP_PADDING=3,GRID_BORDER=1,GRID_GAP=1;
+  const tilePitch=()=>cellSize+GRID_GAP;
+  function scheduleCanvasRender(){
+    if(canvasRenderQueued)return;
+    canvasRenderQueued=true;
+    requestAnimationFrame(()=>{canvasRenderQueued=false;drawMapCanvas();});
+  }
+  function updateCanvasViewport(){
+    if(!mapCanvas||!canvasScroll)return;
+    const width=Math.max(1,canvasScroll.clientWidth),height=Math.max(1,canvasScroll.clientHeight);
+    const dpr=Math.max(1,Math.min(2,window.devicePixelRatio||1));
+    const backingWidth=Math.max(1,Math.round(width*dpr)),backingHeight=Math.max(1,Math.round(height*dpr));
+    if(mapCanvas.width!==backingWidth)mapCanvas.width=backingWidth;
+    if(mapCanvas.height!==backingHeight)mapCanvas.height=backingHeight;
+    mapCanvas.style.width=width+'px';mapCanvas.style.height=height+'px';
+    // Keep the drawing surface anchored to the visible viewport while the spacer supplies scroll range.
+    mapCanvas.style.left=canvasScroll.scrollLeft+'px';
+    mapCanvas.style.top=canvasScroll.scrollTop+'px';
+    mapCanvas.dataset.dpr=String(dpr);
+  }
+  function updateGridScale(){
+    const worldWidth=cols*cellSize+(cols-1)*GRID_GAP+2*GRID_BORDER+2*MAP_PADDING;
+    const worldHeight=rows*cellSize+(rows-1)*GRID_GAP+2*GRID_BORDER+2*MAP_PADDING;
+    canvasWorld.style.width=Math.max(canvasScroll.clientWidth,worldWidth)+'px';
+    canvasWorld.style.height=Math.max(canvasScroll.clientHeight,worldHeight)+'px';
+    updateCanvasViewport();scheduleCanvasRender();
+  }
+  function drawMapCanvas(){
+    if(!mapContext)return;
+    updateCanvasViewport();
+    const dpr=Number(mapCanvas.dataset.dpr)||1;
+    const width=mapCanvas.width/dpr,height=mapCanvas.height/dpr;
+    const scrollX=canvasScroll.scrollLeft,scrollY=canvasScroll.scrollTop;
+    const pitch=tilePitch(),gridWidth=cols*cellSize+(cols-1)*GRID_GAP+2*GRID_BORDER;
+    const gridHeight=rows*cellSize+(rows-1)*GRID_GAP+2*GRID_BORDER;
+    const styles=getComputedStyle(document.documentElement);
+    const gapColor=styles.getPropertyValue('--border').trim()||'#d6dbe2';
+    const blockColor=styles.getPropertyValue('--block-line').trim()||'#2b65d9';
+    mapContext.setTransform(dpr,0,0,dpr,0,0);
+    mapContext.imageSmoothingEnabled=false;
+    mapContext.clearRect(0,0,width,height);
+    mapContext.fillStyle=styles.getPropertyValue('--bg').trim()||'#f5f6f8';
+    mapContext.fillRect(0,0,width,height);
+    const gridScreenX=MAP_PADDING-scrollX,gridScreenY=MAP_PADDING-scrollY;
+    mapContext.fillStyle=gapColor;mapContext.fillRect(gridScreenX,gridScreenY,gridWidth,gridHeight);
+    const firstX=Math.max(0,Math.floor((scrollX-MAP_PADDING-GRID_BORDER)/pitch));
+    const firstY=Math.max(0,Math.floor((scrollY-MAP_PADDING-GRID_BORDER)/pitch));
+    const lastX=Math.min(cols-1,Math.ceil((scrollX+width-MAP_PADDING-GRID_BORDER)/pitch));
+    const lastY=Math.min(rows-1,Math.ceil((scrollY+height-MAP_PADDING-GRID_BORDER)/pitch));
+    mapContext.font='650 11px system-ui,-apple-system,sans-serif';
+    mapContext.textAlign='center';mapContext.textBaseline='middle';
+    for(let y=firstY;y<=lastY;y++){
+      const sy=MAP_PADDING+GRID_BORDER+y*pitch-scrollY;
+      if(sy+cellSize<0||sy>height)continue;
+      for(let x=firstX;x<=lastX;x++){
+        const sx=MAP_PADDING+GRID_BORDER+x*pitch-scrollX;
+        if(sx+cellSize<0||sx>width)continue;
+        mapContext.fillStyle=mapBackgroundColor;mapContext.fillRect(sx,sy,cellSize,cellSize);
+        let visibleTop=-1,topNumber=0;
+        for(let i=0;i<layers.length;i++){
+          const layer=layers[i];const number=layer.map[y][x];
+          if(number===0||layer.opacity<=0)continue;
+          mapContext.globalAlpha=layer.opacity/100;
+          mapContext.fillStyle=palette.get(number)?.color||'#ff00ff';
+          mapContext.fillRect(sx,sy,cellSize,cellSize);
+          visibleTop=i;topNumber=number;
+        }
+        mapContext.globalAlpha=1;
+        if(visibleTop>=0&&cellSize>=8){
+          mapContext.save();mapContext.beginPath();mapContext.rect(sx,sy,cellSize,cellSize);mapContext.clip();
+          mapContext.globalAlpha=layers[visibleTop].opacity/100;mapContext.fillStyle='#111';
+          mapContext.fillText(String(topNumber),sx+cellSize/2,sy+cellSize/2,cellSize-2);
+          mapContext.restore();
+        }
+        if((x+1)<cols&&(x+1)%blockCols===0){mapContext.fillStyle=blockColor;mapContext.fillRect(sx+cellSize-3,sy,3,cellSize+GRID_GAP);}
+        if((y+1)<rows&&(y+1)%blockRows===0){mapContext.fillStyle=blockColor;mapContext.fillRect(sx,sy+cellSize-3,cellSize+GRID_GAP,3);}
+      }
+    }
+    // Keyboard cursor is kept visible without allocating per-cell DOM nodes.
+    if(document.activeElement===mapCanvas&&cursorX<cols&&cursorY<rows){
+      const sx=MAP_PADDING+GRID_BORDER+cursorX*pitch-scrollX,sy=MAP_PADDING+GRID_BORDER+cursorY*pitch-scrollY;
+      mapContext.strokeStyle='#ffb000';mapContext.lineWidth=2;mapContext.strokeRect(sx+1,sy+1,Math.max(1,cellSize-2),Math.max(1,cellSize-2));
+    }
+  }
+  function renderMap(){
+    updateGridScale();
+    $('dimensions').textContent=`${cols}列 × ${rows}行（${cols*rows}マス）`;updateBlockInfo();updateMiniMapAspectRatio();scheduleCanvasRender();scheduleMiniMapRender(true);
+  }
+  function updateBlockInfo(){const h=Math.ceil(cols/blockCols),v=Math.ceil(rows/blockRows);$('blockInfo').textContent=`ブロック：横${h} × 縦${v} = ${h*v}個${(cols%blockCols||rows%blockRows)?'（端の余りは小さいブロック）':''}`;}
+  function beginStroke(){
+    if(activeStroke)commitStroke();
+    activeStroke={layerId:currentLayer().id,changes:[]};
+  }
+  function commitStroke(){
+    const changed=!!(activeStroke&&activeStroke.changes.length);
+    if(changed){history.push(activeStroke);if(history.length>1000)history.shift();}
+    activeStroke=null;
+    if(changed){scheduleCanvasRender();updateOutput();}
+  }
+  function paint(x,y){
+    const layer=currentLayer(),old=layer.map[y][x];if(old===selected)return;
+    const change={x,y,old};
+    if(activeStroke&&activeStroke.layerId===layer.id)activeStroke.changes.push(change);
+    else{if(activeStroke)commitStroke();history.push({layerId:layer.id,changes:[change]});if(history.length>1000)history.shift();}
+    layer.map[y][x]=selected;scheduleCanvasRender();
+  }
+  function paintBrush(centerX,centerY){
+    const ownsStroke=!activeStroke;if(ownsStroke)beginStroke();
+    const firstX=centerX-Math.floor((penSize-1)/2),firstY=centerY-Math.floor((penSize-1)/2);
+    for(let y=firstY;y<firstY+penSize;y++)for(let x=firstX;x<firstX+penSize;x++)if(x>=0&&x<cols&&y>=0&&y<rows)paint(x,y);
+    if(ownsStroke)commitStroke();
+  }
+  function setPenSize(value){penSize=Math.max(1,Math.min(20,Math.round(Number(value)||1)));$('penSize').value=String(penSize);$('penSizeValue').textContent=penSize+'マス';}
+  $('penSize').addEventListener('input',event=>setPenSize(event.target.value));
+  $('penSizeDecrease').addEventListener('click',()=>setPenSize(penSize-1));
+  $('penSizeIncrease').addEventListener('click',()=>setPenSize(penSize+1));
+  bindTap($('registerTile'),()=>{
+    const n=Number($('tileNumber').value);if(!Number.isSafeInteger(n)||n<1||n>999999){say('タイル番号は1〜999999の整数にしてください。');return;}
+    palette.set(n,{color:$('tileColor').value});selected=n;$('selectedLabel').textContent='選択中：'+label(n);
+    const saved=savePaletteToStorage();renderPalette();renderMap();say(saved?`タイル${n}を登録しました。パレットは自動保存されました。`:`タイル${n}を登録しました。ブラウザへの自動保存ができなかったため、JSON保存を使ってください。`);
+  });
+  document.querySelectorAll('.anchor-option').forEach(button=>bindTap(button,()=>{
+    resizeAnchorX=button.dataset.x;resizeAnchorY=button.dataset.y;
+    document.querySelectorAll('.anchor-option').forEach(option=>option.setAttribute('aria-pressed',String(option===button)));
+    say('サイズ変更の基準点を「'+button.getAttribute('aria-label').replace('を基準','')+'」にしました。');
+  }));
+  $('resize').addEventListener('click',()=>{
+    commitStroke();const nc=Number($('cols').value),nr=Number($('rows').value);
+    if(!Number.isInteger(nc)||!Number.isInteger(nr)||nc<1||nr<1||nc>MAX_DIM||nr>MAX_DIM||nc*nr>MAX_CELLS){say('列数・行数はそれぞれ1〜500、合計250,000マス以内にしてください。');return;}
+    const dx=resizeAnchorX==='west'?0:resizeAnchorX==='east'?nc-cols:Math.floor((nc-cols)/2);
+    const dy=resizeAnchorY==='north'?0:resizeAnchorY==='south'?nr-rows:Math.floor((nr-rows)/2);
+    layers.forEach(layer=>{const next=Array.from({length:nr},()=>Array(nc).fill(0));for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){const nx=x+dx,ny=y+dy;if(nx>=0&&nx<nc&&ny>=0&&ny<nr)next[ny][nx]=layer.map[y][x];}layer.map=next;});
+    cols=nc;rows=nr;history=[];renderMap();updateOutput();
+    const anchor=document.querySelector('.anchor-option[aria-pressed="true"]');const anchorName=anchor?anchor.getAttribute('aria-label').replace('を基準',''):'中央';say(`キャンバスを${cols}列×${rows}行に変更しました。基準点：${anchorName}。`);
+  });
+  $('applyBlocks').addEventListener('click',()=>{
+    commitStroke();const bc=Number($('blockCols').value),br=Number($('blockRows').value);if(!Number.isInteger(bc)||!Number.isInteger(br)||bc<1||br<1||bc>MAX_DIM||br>MAX_DIM){say('ブロックの列数・行数はそれぞれ1〜500の整数にしてください。');return;}
+    blockCols=bc;blockRows=br;renderMap();say(`区切り線を適用しました。1ブロックは${blockCols}列×${blockRows}行です。`);
+  });
+  function undoLastStroke(){
+    commitStroke();const h=history.pop();if(!h){say('戻せる操作がありません。');return false;}
+    const layer=layers.find(item=>item.id===h.layerId);
+    if(layer){
+      for(let i=h.changes.length-1;i>=0;i--){
+        const change=h.changes[i];
+        if(change.y<rows&&change.x<cols)layer.map[change.y][change.x]=change.old;
+      }
+      scheduleCanvasRender();updateOutput();
+    }
+    say('直前の塗り操作を取り消しました。');return true;
+  }
+  $('undo').addEventListener('click',undoLastStroke);
+  $('clear').addEventListener('click',()=>{commitStroke();const layer=currentLayer();layer.map=makeEmptyMap();history=history.filter(entry=>entry.layerId!==layer.id);renderMap();updateOutput();say(`レイヤー「${layer.name || '（名前なし）'}」を空白にしました。`);});
+  $('refresh').addEventListener('click',()=>{updateOutput();say('現在のレイヤー配列で出力欄を再生成しました。');});
+  $('copy').addEventListener('click',async()=>{
+    try{await navigator.clipboard.writeText($('output').value);say(outputMode==='unity'?'Unity形式の配列をコピーしました。':'通常形式の配列をコピーしました。');}
+    catch(e){$('output').focus();$('output').select();try{if(document.execCommand('copy')){say('配列をコピーしました。');return;}}catch(_){}say('配列を選択しました。長押ししてコピーしてください。');}
+  });
+  function download(name,content,type){const blob=new Blob([content],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);}
+  $('saveTxt').addEventListener('click',()=>{download('mapData.txt',$('output').value,'text/plain;charset=utf-8');say(outputMode==='unity'?'Unity形式の配列を.txt保存しました。':'通常形式の配列を.txt保存しました。');});
+  $('savePalette').addEventListener('click',()=>{download('tile-map-palette.json',JSON.stringify(paletteFileData(),null,2),'application/json;charset=utf-8');say('パレットをJSONファイルに保存しました。');});
+  $('loadPalette').addEventListener('change',async e=>{
+    const file=e.target.files?.[0];if(!file)return;
+    try{const saved=JSON.parse(await file.text());if(!saved||!['tile-map-palette','tile-map-editor'].includes(saved.format)||!Array.isArray(saved.palette))throw new Error('パレット形式のJSONファイルを選んでください。');let loaded=0;saved.palette.forEach(tile=>{if(Number.isSafeInteger(tile.id)&&tile.id>=1&&tile.id<=999999&&validPaletteColor(tile.color)){palette.set(tile.id,{color:tile.color});loaded++;}});const stored=savePaletteToStorage();renderPalette();renderMap();say(stored?`${loaded}個のタイルをパレットに読み込み、自動保存しました。`:`${loaded}個のタイルを読み込みました。ブラウザへの自動保存はできませんでした。`);}catch(error){say(error.message||'パレットを読み込めませんでした。');}e.target.value='';
+  });
+  $('saveProject').addEventListener('click',()=>{
+    const project={format:'tile-map-editor',version:2,cols,rows,blockCols,blockRows,mapBackgroundColor,activeLayerName:currentLayer().name,palette:[...palette.entries()].map(([id,v])=>({id,color:v.color})),layers:layers.map(layer=>({name:layer.name,opacity:layer.opacity,map:layer.map}))};
+    download('tile-map-project.json',JSON.stringify(project,null,2),'application/json;charset=utf-8');say('編集データ（全レイヤーを含む）を保存しました。');
+  });
+  function defaultColor(n){const hue=(n*137.508)%360;return `hsl(${hue} 55% 68%)`;}
+  function cleanMap(data){
+    if(!Array.isArray(data)||!data.length||!data.every(r=>Array.isArray(r)&&r.length===data[0].length&&r.length>0))throw new Error('配列は、同じ長さの行が並ぶ二次元配列にしてください。');
+    const nr=data.length,nc=data[0].length;if(nr>MAX_DIM||nc>MAX_DIM||nr*nc>MAX_CELLS)throw new Error('読み込み可能な上限は500×500マス（最大250,000マス）です。');
+    return data.map(row=>row.map(n=>{if(!Number.isSafeInteger(n)||n<0||n>999999)throw new Error('タイル番号は0〜999999の整数にしてください。');return n;}));
+  }
+  function importLayers(layerData,opts={}){
+    if(!Array.isArray(layerData)||!layerData.length)throw new Error('レイヤーが見つかりません。');
+    const prepared=layerData.map((item,index)=>{
+      const name=String(item.name??'').trim();
+      const map=cleanMap(item.map);const opacity=Number.isFinite(item.opacity)?Math.max(0,Math.min(100,Math.round(item.opacity))):100;
+      return {name,map,opacity};
+    });
+    const nr=prepared[0].map.length,nc=prepared[0].map[0].length;
+    if(prepared.some(item=>item.map.length!==nr||item.map[0].length!==nc))throw new Error('すべてのレイヤーのマップサイズを一致させてください。');
+    if(prepared.some((item,i)=>item.name&&prepared.some((other,j)=>i!==j&&item.name===other.name)))throw new Error('レイヤー名が重複しています。');
+    commitStroke();cols=nc;rows=nr;layers=prepared.map(item=>({id:nextLayerId++,name:item.name,map:item.map,opacity:item.opacity}));
+    const active=layers.find(layer=>layer.name===opts.activeLayerName);activeLayerId=(active||layers[0]).id;history=[];
+    $('cols').value=cols;$('rows').value=rows;renderLayers();renderMap();updateOutput();
+  }
+  function applyArray(data){const map=cleanMap(data);importLayers([{name:'',map,opacity:100}]);}
+  function parseNormalOutput(text){
+    const widthMatch=text.match(/\bconst\s+width\s*=\s*(\d+)\s*;/),heightMatch=text.match(/\bconst\s+height\s*=\s*(\d+)\s*;/);
+    if(!widthMatch||!heightMatch)return null;
+    const re=/scene(?:\.([A-Za-z_$][A-Za-z0-9_$]*)|\[("(?:\\.|[^"\\])*")\])\s*=\s*\[/g;
+    const found=[];let match;
+    while((match=re.exec(text))){const name=match[1]??JSON.parse(match[2]);const start=re.lastIndex-1;let depth=0,end=-1;
+      for(let i=start;i<text.length;i++){if(text[i]==='[')depth++;else if(text[i]===']'){depth--;if(depth===0){end=i+1;break;}}}
+      if(end<0)throw new Error(`レイヤー「${name}」の配列が閉じられていません。`);
+      let map;try{map=JSON.parse(text.slice(start,end));}catch(_){throw new Error(`レイヤー「${name}」の配列を読み取れませんでした。`);}
+      found.push({name,map,opacity:100});re.lastIndex=end;
+    }
+    if(!found.length)throw new Error('通常モードのレイヤー配列が見つかりません。');
+    if(found.some(item=>item.map.length!==Number(heightMatch[1])||item.map.some(row=>row.length!==Number(widthMatch[1]))))throw new Error('width・heightとレイヤー配列のサイズが一致しません。');
+    return found;
+  }
+  function loadText(text){
+    let parsed;try{parsed=JSON.parse(text);}catch(_){const normal=parseNormalOutput(text);if(normal){importLayers(normal);say('通常モードの複数レイヤー配列を読み込みました。');return;}
+      const cleaned=text.trim().replace(/;\s*$/,'');if(!/^[\s\[\],\d]+$/.test(cleaned))throw new Error('通常モード、Unity形式、または数値だけの二次元配列を読み込んでください。');try{parsed=JSON.parse('['+cleaned+']');}catch(e){throw new Error('配列の形式を読み取れませんでした。');}}
+    if(Array.isArray(parsed)&&parsed.length&&parsed.every(row=>typeof row==='string')){
+      const rowsData=parsed.map(row=>{if(!/^\s*\d+(?:\s*,\s*\d+)*\s*$/.test(row))throw new Error('Unity形式の各行は、カンマ区切りの整数にしてください。');return row.split(',').map(value=>Number(value.trim()));});
+      applyArray(rowsData);say('Unity形式の1レイヤー配列を読み込みました。');return;
+    }
+    if(Array.isArray(parsed)){applyArray(parsed);say('二次元配列を読み込みました。');return;}
+    if(parsed&&parsed.format==='tile-map-editor'){
+      if(!Array.isArray(parsed.palette))throw new Error('保存データのパレットが不正です。');
+      const newPalette=new Map([[0,{color:'#ffffff'}]]);parsed.palette.forEach(t=>{if(Number.isSafeInteger(t.id)&&t.id>=1&&t.id<=999999&&validPaletteColor(t.color))newPalette.set(t.id,{color:t.color});});palette=newPalette;
+      mapBackgroundColor=typeof parsed.mapBackgroundColor==='string'&&/^#[0-9a-f]{6}$/i.test(parsed.mapBackgroundColor)?parsed.mapBackgroundColor:defaultMapBackgroundColor;$('mapBackground').value=mapBackgroundColor;
+      blockCols=Number.isInteger(parsed.blockCols)&&parsed.blockCols>=1&&parsed.blockCols<=MAX_DIM?parsed.blockCols:18;blockRows=Number.isInteger(parsed.blockRows)&&parsed.blockRows>=1&&parsed.blockRows<=MAX_DIM?parsed.blockRows:10;
+      $('blockCols').value=blockCols;$('blockRows').value=blockRows;
+      if(Array.isArray(parsed.layers))importLayers(parsed.layers,{activeLayerName:parsed.activeLayerName});
+      else if(Array.isArray(parsed.map))applyArray(parsed.map);else throw new Error('保存データのレイヤーが不正です。');
+      selected=0;$('selectedLabel').textContent='選択中：0（透明）';renderPalette();say('編集データを読み込みました。');return;
+    }
+    if(parsed&&typeof parsed==='object'&&Number.isInteger(parsed.width)&&Number.isInteger(parsed.height)){
+      const layerData=Object.entries(parsed).filter(([key])=>key!=='width'&&key!=='height').map(([name,rowsData])=>{
+        if(!Array.isArray(rowsData))throw new Error(`レイヤー「${name}」のデータが配列ではありません。`);
+        const map=rowsData.map(row=>{if(typeof row!=='string'||!/^\s*\d+(?:\s*,\s*\d+)*\s*$/.test(row))throw new Error(`レイヤー「${name}」の行データが不正です。`);return row.split(',').map(value=>Number(value.trim()));});return {name,map,opacity:100};
+      });
+      if(!layerData.length)throw new Error('Unity形式のレイヤーが見つかりません。');
+      if(layerData.some(layer=>layer.map.length!==parsed.height||layer.map.some(row=>row.length!==parsed.width)))throw new Error('width・heightとUnityレイヤー配列のサイズが一致しません。');
+      importLayers(layerData);say('Unity形式の複数レイヤー配列を読み込みました。');return;
+    }
+    throw new Error('対応している配列形式ではありません。');
+  }
+  $('loadArray').addEventListener('click',()=>{try{loadText($('output').value);}catch(e){say(e.message);}});
+  $('loadFile').addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{loadText(await file.text());}catch(err){say(err.message);}e.target.value='';});
+  function applyViewportSize(){
+    const widthPercent=Number($('viewportWidth').value),heightPx=Number($('viewportHeight').value);
+    canvasScroll.style.width=widthPercent+'%';canvasScroll.style.height=heightPx+'px';canvasScroll.style.maxWidth='100%';
+    $('viewportWidthValue').textContent=widthPercent+'%';$('viewportHeightValue').textContent=heightPx+'px';
+  }
+  $('viewportWidth').addEventListener('input',applyViewportSize);
+  $('viewportHeight').addEventListener('input',applyViewportSize);
+  $('resetViewport').addEventListener('click',()=>{$('viewportWidth').value='100';$('viewportHeight').value='360';applyViewportSize();say('マップの表示範囲を初期値に戻しました。');});
+  applyViewportSize();
+
+  function updateZoomValue(){$('zoomValue').textContent=(cellSize/30).toFixed(2)+'×';}
+  function setCellSize(nextSize,focusX=null,focusY=null){
+    const oldSize=cellSize;nextSize=Math.max(10,Math.min(60,Math.round(nextSize)));
+    if(nextSize===oldSize)return;
+    let px=canvasScroll.clientWidth/2,py=canvasScroll.clientHeight/2;
+    if(focusX!==null&&focusY!==null){const rect=canvasScroll.getBoundingClientRect();px=focusX-rect.left-canvasScroll.clientLeft;py=focusY-rect.top-canvasScroll.clientTop;}
+    const contentX=canvasScroll.scrollLeft+px,contentY=canvasScroll.scrollTop+py;
+    cellSize=nextSize;updateGridScale();const ratio=cellSize/oldSize;
+    canvasScroll.scrollLeft=Math.max(0,contentX*ratio-px);canvasScroll.scrollTop=Math.max(0,contentY*ratio-py);
+    updateCanvasViewport();scheduleCanvasRender();updateZoomValue();scheduleMiniMapRender();
+  }
+  $('zoomIn').addEventListener('click',()=>setCellSize(cellSize+2));
+  $('zoomOut').addEventListener('click',()=>setCellSize(cellSize-2));
+  updateZoomValue();
+
+  $('mapBackground').value=mapBackgroundColor;
+  $('mapBackground').addEventListener('input',event=>{
+    const value=event.target.value;if(!/^#[0-9a-f]{6}$/i.test(value))return;
+    mapBackgroundColor=value;scheduleCanvasRender();scheduleMiniMapRender(true);say('マップの背景色を変更しました。');
+  });
+
+  // Mini-map base image is cached. Scroll/zoom only redraws the viewport outline.
+  let minimapRenderQueued=false,minimapInitialized=false,minimapContentDirty=true;
+  const minimapBuffer=document.createElement('canvas');
+  function scheduleMiniMapRender(contentChanged=false){
+    if(contentChanged)minimapContentDirty=true;
+    const mini=$('minimapWindow');if(!mini||mini.hidden||minimapRenderQueued)return;
+    minimapRenderQueued=true;requestAnimationFrame(()=>{minimapRenderQueued=false;drawMiniMap();});
+  }
+  function drawMiniMap(){
+    const mini=$('minimapWindow');if(mini.hidden)return;const canvas=$('minimapCanvas');
+    const width=Math.max(1,Math.floor(canvas.clientWidth)),height=Math.max(1,Math.floor(canvas.clientHeight));
+    const dpr=Math.max(1,Math.min(2,window.devicePixelRatio||1));
+    const backingWidth=Math.max(1,Math.round(width*dpr)),backingHeight=Math.max(1,Math.round(height*dpr));
+    if(canvas.width!==backingWidth)canvas.width=backingWidth;if(canvas.height!==backingHeight)canvas.height=backingHeight;
+    const ctx=canvas.getContext('2d');if(!ctx)return;
+    // Keep the cached overview aspect ratio tied to the map, not to the resizable minimap window.
+    const bufferScale=512/Math.max(cols,rows),bufferWidth=Math.max(1,Math.round(cols*bufferScale)),bufferHeight=Math.max(1,Math.round(rows*bufferScale));
+    const bufferChanged=minimapBuffer.width!==bufferWidth||minimapBuffer.height!==bufferHeight;
+    if(bufferChanged){minimapBuffer.width=bufferWidth;minimapBuffer.height=bufferHeight;minimapContentDirty=true;}
+    if(minimapContentDirty){
+      const base=minimapBuffer.getContext('2d');if(!base)return;
+      base.setTransform(1,0,0,1,0,0);base.clearRect(0,0,bufferWidth,bufferHeight);
+      base.fillStyle=mapBackgroundColor;base.fillRect(0,0,bufferWidth,bufferHeight);
+      const scale=Math.min(bufferWidth/cols,bufferHeight/rows),offsetX=(bufferWidth-cols*scale)/2,offsetY=(bufferHeight-rows*scale)/2;
+      for(const layer of layers){
+        if(layer.opacity<=0)continue;base.globalAlpha=layer.opacity/100;
+        for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+          const n=layer.map[y][x];if(n===0)continue;
+          base.fillStyle=palette.get(n)?.color||'#ff00ff';
+          base.fillRect(offsetX+x*scale,offsetY+y*scale,Math.max(scale,.35),Math.max(scale,.35));
+        }
+      }
+      base.globalAlpha=1;minimapContentDirty=false;
+    }
+    ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,width,height);
+    ctx.imageSmoothingEnabled=false;ctx.drawImage(minimapBuffer,0,0,width,height);
+    const pitch=cellSize+1;
+    const left=Math.max(0,Math.min(cols,(canvasScroll.scrollLeft-MAP_PADDING-GRID_BORDER)/pitch));
+    const top=Math.max(0,Math.min(rows,(canvasScroll.scrollTop-MAP_PADDING-GRID_BORDER)/pitch));
+    const right=Math.max(left,Math.min(cols,(canvasScroll.scrollLeft+canvasScroll.clientWidth-MAP_PADDING-GRID_BORDER)/pitch));
+    const bottom=Math.max(top,Math.min(rows,(canvasScroll.scrollTop+canvasScroll.clientHeight-MAP_PADDING-GRID_BORDER)/pitch));
+    const rx=left/cols*width,ry=top/rows*height,rw=Math.max(1,(right-left)/cols*width),rh=Math.max(1,(bottom-top)/rows*height);
+    ctx.fillStyle='rgba(53,106,230,.13)';ctx.fillRect(rx,ry,rw,rh);ctx.lineWidth=3;ctx.strokeStyle='rgba(0,0,0,.85)';ctx.strokeRect(rx,ry,rw,rh);ctx.lineWidth=1.5;ctx.strokeStyle='#fff';ctx.strokeRect(rx,ry,rw,rh);
+  }
+  const minimapWindow=$('minimapWindow'),minimapParent=document.querySelector('.map-viewport-container'),minimapHeader=$('minimapHeader'),minimapResize=$('minimapResize');
+  function miniMapAspect(){return cols/rows;}
+  function maxMiniMapWidth(){const ratio=miniMapAspect();return Math.max(1,Math.min(Math.max(1,minimapParent.clientWidth-16),Math.max(1,minimapParent.clientHeight-16)*ratio));}
+  function updateMiniMapAspectRatio(){minimapWindow.style.aspectRatio=`${cols} / ${rows}`;if(!minimapInitialized)return;const width=Math.max(1,Math.min(maxMiniMapWidth(),minimapWindow.offsetWidth||230));minimapWindow.style.width=width+'px';const pos=clampMiniMapPosition(minimapWindow.offsetLeft,minimapWindow.offsetTop);minimapWindow.style.left=pos.left+'px';minimapWindow.style.top=pos.top+'px';minimapWindow.style.right='auto';}
+  function setMiniMapVisible(visible){
+    minimapWindow.hidden=!visible;$('toggleMinimap').setAttribute('aria-pressed',String(visible));$('toggleMinimap').textContent=visible?'参照ウィンドウを隠す':'参照ウィンドウを表示';
+    if(visible&&!minimapInitialized){minimapWindow.style.aspectRatio=`${cols} / ${rows}`;minimapWindow.style.width=Math.min(230,maxMiniMapWidth())+'px';minimapWindow.style.left='auto';minimapWindow.style.right='8px';minimapWindow.style.top='8px';minimapInitialized=true;}
+    if(visible)scheduleMiniMapRender();
+  }
+  $('toggleMinimap').addEventListener('click',()=>setMiniMapVisible(minimapWindow.hidden));$('closeMinimap').addEventListener('click',()=>setMiniMapVisible(false));
+  let minimapPointerAction=null;
+  function clampMiniMapPosition(left,top){return {left:Math.max(0,Math.min(Math.max(0,minimapParent.clientWidth-minimapWindow.offsetWidth),left)),top:Math.max(0,Math.min(Math.max(0,minimapParent.clientHeight-minimapWindow.offsetHeight),top))};}
+  minimapHeader.addEventListener('pointerdown',event=>{if(event.target.closest('button'))return;event.preventDefault();event.stopPropagation();const pr=minimapParent.getBoundingClientRect(),wr=minimapWindow.getBoundingClientRect();minimapPointerAction={type:'move',pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,left:wr.left-pr.left,top:wr.top-pr.top};minimapWindow.style.left=minimapPointerAction.left+'px';minimapWindow.style.top=minimapPointerAction.top+'px';minimapWindow.style.right='auto';minimapHeader.setPointerCapture(event.pointerId);});
+  minimapResize.addEventListener('pointerdown',event=>{event.preventDefault();event.stopPropagation();minimapPointerAction={type:'resize',pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,width:minimapWindow.offsetWidth,height:minimapWindow.offsetHeight};minimapResize.setPointerCapture(event.pointerId);});
+  function moveMiniMapPointer(event){if(!minimapPointerAction||event.pointerId!==minimapPointerAction.pointerId)return;event.preventDefault();event.stopPropagation();const dx=event.clientX-minimapPointerAction.startX,dy=event.clientY-minimapPointerAction.startY;if(minimapPointerAction.type==='move'){const pos=clampMiniMapPosition(minimapPointerAction.left+dx,minimapPointerAction.top+dy);minimapWindow.style.left=pos.left+'px';minimapWindow.style.top=pos.top+'px';}else{const ratio=miniMapAspect(),wx=minimapPointerAction.width+dx,wy=(minimapPointerAction.height+dy)*ratio,desired=Math.abs(dx)>=Math.abs(dy*ratio)?wx:wy,width=Math.max(1,Math.min(maxMiniMapWidth(),desired));minimapWindow.style.aspectRatio=`${cols} / ${rows}`;minimapWindow.style.width=width+'px';const pos=clampMiniMapPosition(minimapWindow.offsetLeft,minimapWindow.offsetTop);minimapWindow.style.left=pos.left+'px';minimapWindow.style.top=pos.top+'px';scheduleMiniMapRender();}}
+  function endMiniMapPointer(event){if(!minimapPointerAction||event.pointerId!==minimapPointerAction.pointerId)return;minimapPointerAction=null;scheduleMiniMapRender();}
+  minimapHeader.addEventListener('pointermove',moveMiniMapPointer);minimapHeader.addEventListener('pointerup',endMiniMapPointer);minimapHeader.addEventListener('pointercancel',endMiniMapPointer);minimapResize.addEventListener('pointermove',moveMiniMapPointer);minimapResize.addEventListener('pointerup',endMiniMapPointer);minimapResize.addEventListener('pointercancel',endMiniMapPointer);
+  minimapResize.addEventListener('keydown',event=>{if(!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.key))return;event.preventDefault();const ratio=miniMapAspect();let width=minimapWindow.offsetWidth;if(event.key==='ArrowLeft')width-=10;if(event.key==='ArrowRight')width+=10;if(event.key==='ArrowUp')width-=10*ratio;if(event.key==='ArrowDown')width+=10*ratio;width=Math.max(1,Math.min(maxMiniMapWidth(),width));minimapWindow.style.aspectRatio=`${cols} / ${rows}`;minimapWindow.style.width=width+'px';const pos=clampMiniMapPosition(minimapWindow.offsetLeft,minimapWindow.offsetTop);minimapWindow.style.left=pos.left+'px';minimapWindow.style.top=pos.top+'px';scheduleMiniMapRender();});
+  canvasScroll.addEventListener('scroll',()=>{updateCanvasViewport();scheduleCanvasRender();scheduleMiniMapRender();},{passive:true});
+  if(typeof ResizeObserver!=='undefined'){const canvasResizeObserver=new ResizeObserver(()=>{updateGridScale();scheduleCanvasRender();scheduleMiniMapRender();});canvasResizeObserver.observe(canvasScroll);}
+  window.addEventListener('resize',()=>{updateGridScale();scheduleCanvasRender();scheduleMiniMapRender();});
+
+
+  // Touch gestures: one finger paints; two fingers can scroll and zoom simultaneously; two-finger tap undoes.
+  let gestureMode='idle',touchStart=null,lastTouch=null,touchMoved=false,touchStartCell=null,lastPaintedIndex=-1;
+  let pinchStartDistance=0,pinchStartSize=cellSize,twoFingerState=null;
+  let suppressCellClick=false;
+  const distance=(a,b)=>Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+  const midpoint=(a,b)=>({x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2});
+  const point=(t)=>({x:t.clientX,y:t.clientY});
+  function cellAtPoint(clientX,clientY){
+    const rect=mapCanvas.getBoundingClientRect();
+    if(clientX<rect.left||clientY<rect.top||clientX>=rect.right||clientY>=rect.bottom)return null;
+    const worldX=clientX-rect.left+canvasScroll.scrollLeft-MAP_PADDING-GRID_BORDER;
+    const worldY=clientY-rect.top+canvasScroll.scrollTop-MAP_PADDING-GRID_BORDER;
+    if(worldX<0||worldY<0)return null;
+    const pitch=tilePitch(),x=Math.floor(worldX/pitch),y=Math.floor(worldY/pitch);
+    if(x<0||x>=cols||y<0||y>=rows)return null;
+    if(worldX-x*pitch>=cellSize||worldY-y*pitch>=cellSize)return null;
+    return {x,y,index:y*cols+x};
+  }
+  function paintAtPoint(x,y){const cell=cellAtPoint(x,y);if(!cell||cell.index===lastPaintedIndex)return;lastPaintedIndex=cell.index;paintBrush(cell.x,cell.y);}
+  function paintCellElement(cell){if(!cell)return;lastPaintedIndex=cell.index;paintBrush(cell.x,cell.y);}
+  function suppressSyntheticClick(){suppressCellClick=true;setTimeout(()=>{suppressCellClick=false;},450);}
+  function resetTouchState(){gestureMode='idle';touchStart=null;lastTouch=null;touchMoved=false;touchStartCell=null;lastPaintedIndex=-1;pinchStartDistance=0;twoFingerState=null;}
+  function startTwoFingerGesture(touches){
+    commitStroke();
+    const a=point(touches[0]),b=point(touches[1]),mid={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+    twoFingerState={lastCenter:mid,startCenter:mid,baseDistance:Math.hypot(a.x-b.x,a.y-b.y),startedAt:Date.now(),moved:false};
+    gestureMode='twoPending';touchStart=null;lastTouch=null;touchStartCell=null;touchMoved=false;lastPaintedIndex=-1;
+  }
+  function updateTwoFingerTransform(touches){
+    if(!twoFingerState||twoFingerState.baseDistance<=0)return;
+    const currentCenter=midpoint(touches[0],touches[1]);
+    const currentDistance=distance(touches[0],touches[1]);
+    const nextSize=Math.max(10,Math.min(60,Math.round(pinchStartSize*currentDistance/pinchStartDistance)));
+    const dx=currentCenter.x-twoFingerState.lastCenter.x;
+    const dy=currentCenter.y-twoFingerState.lastCenter.y;
+
+    // First scale around the previous midpoint, then move the map with the midpoint.
+    // This keeps the content between the fingers anchored while both fingers move.
+    if(nextSize!==cellSize){
+      setCellSize(nextSize,twoFingerState.lastCenter.x,twoFingerState.lastCenter.y);
+    }
+    if(Math.abs(dx)>0.01)canvasScroll.scrollLeft-=dx;
+    if(Math.abs(dy)>0.01)canvasScroll.scrollTop-=dy;
+
+    twoFingerState.lastCenter=currentCenter;
+    twoFingerState.moved=true;
+  }
+  canvasScroll.addEventListener('touchstart',e=>{
+    if(e.touches.length>=2){startTwoFingerGesture(e.touches);pinchStartDistance=twoFingerState.baseDistance||1;pinchStartSize=cellSize;e.preventDefault();return;}
+    if(e.touches.length===1){
+      const t=e.touches[0];
+      gestureMode='pending';touchStart={x:t.clientX,y:t.clientY};lastTouch={x:t.clientX,y:t.clientY};
+      touchStartCell=cellAtPoint(t.clientX,t.clientY);touchMoved=false;lastPaintedIndex=-1;
+    }
+  },{passive:false});
+  canvasScroll.addEventListener('touchmove',e=>{
+    if(e.touches.length>=2&&twoFingerState){
+      const center=midpoint(e.touches[0],e.touches[1]);
+      const currentDistance=distance(e.touches[0],e.touches[1]);
+      const centerMove=Math.hypot(center.x-twoFingerState.startCenter.x,center.y-twoFingerState.startCenter.y);
+      const distanceChange=Math.abs(currentDistance-twoFingerState.baseDistance);
+      if(gestureMode==='twoPending'&&(centerMove>7||distanceChange>9)){
+        gestureMode='twoTransform';
+        twoFingerState.moved=true;
+      }
+      if(gestureMode==='twoTransform')updateTwoFingerTransform(e.touches);
+      e.preventDefault();return;
+    }
+    if(e.touches.length===1&&lastTouch&&(gestureMode==='pending'||gestureMode==='paint')){
+      const t=e.touches[0];
+      if(!touchMoved&&touchStart&&Math.hypot(t.clientX-touchStart.x,t.clientY-touchStart.y)>7){
+        touchMoved=true;gestureMode='paint';beginStroke();paintCellElement(touchStartCell);
+      }
+      if(gestureMode==='paint'&&touchMoved){paintAtPoint(t.clientX,t.clientY);e.preventDefault();}
+      lastTouch={x:t.clientX,y:t.clientY};
+    }
+  },{passive:false});
+  canvasScroll.addEventListener('touchend',e=>{
+    if(twoFingerState){
+      if(e.touches.length===0){
+        const shouldUndo=gestureMode==='twoPending'&&!twoFingerState.moved&&Date.now()-twoFingerState.startedAt<450;
+        if(shouldUndo)undoLastStroke();
+        suppressSyntheticClick();resetTouchState();
+      }
+      e.preventDefault();return;
+    }
+    if(e.touches.length===0&&touchStart){
+      const changed=e.changedTouches[0];
+      if(!touchMoved){const cell=cellAtPoint(changed.clientX,changed.clientY);if(cell)paintCellElement(cell);}
+      commitStroke();suppressSyntheticClick();resetTouchState();e.preventDefault();
+    }
+  },{passive:false});
+  canvasScroll.addEventListener('touchcancel',()=>{commitStroke();resetTouchState();});
+  mapCanvas.addEventListener('keydown',event=>{
+    let moved=false;if(event.key==='ArrowLeft'){cursorX=Math.max(0,cursorX-1);moved=true;}
+    else if(event.key==='ArrowRight'){cursorX=Math.min(cols-1,cursorX+1);moved=true;}
+    else if(event.key==='ArrowUp'){cursorY=Math.max(0,cursorY-1);moved=true;}
+    else if(event.key==='ArrowDown'){cursorY=Math.min(rows-1,cursorY+1);moved=true;}
+    else if(event.key==='Enter'||event.key===' '){event.preventDefault();paintBrush(cursorX,cursorY);scheduleCanvasRender();return;}
+    if(moved){event.preventDefault();const pitch=tilePitch();const x=MAP_PADDING+GRID_BORDER+cursorX*pitch,y=MAP_PADDING+GRID_BORDER+cursorY*pitch;
+      if(x<canvasScroll.scrollLeft||x+cellSize>canvasScroll.scrollLeft+canvasScroll.clientWidth)canvasScroll.scrollLeft=Math.max(0,x-canvasScroll.clientWidth/2);
+      if(y<canvasScroll.scrollTop||y+cellSize>canvasScroll.scrollTop+canvasScroll.clientHeight)canvasScroll.scrollTop=Math.max(0,y-canvasScroll.clientHeight/2);scheduleCanvasRender();}
+  });
+  mapCanvas.addEventListener('focus',scheduleCanvasRender);mapCanvas.addEventListener('blur',scheduleCanvasRender);
+
+  // Desktop: left mouse drag paints continuously without needing a mode switch.
+  let mousePainting=false;
+  canvasScroll.addEventListener('pointerdown',e=>{
+    if(e.pointerType!=='mouse'||e.button!==0)return;
+    const cell=cellAtPoint(e.clientX,e.clientY);if(!cell)return;
+    commitStroke();beginStroke();mousePainting=true;paintCellElement(cell);e.preventDefault();
+  });
+  window.addEventListener('pointermove',e=>{
+    if(!mousePainting)return;
+    paintAtPoint(e.clientX,e.clientY);e.preventDefault();
+  },{passive:false});
+  function finishMouseStroke(){if(!mousePainting)return;mousePainting=false;commitStroke();}
+  window.addEventListener('pointerup',finishMouseStroke);
+  window.addEventListener('pointercancel',finishMouseStroke);
+  $('selectedLabel').textContent='選択中：'+label(selected);
+  const paletteRestored=restorePaletteFromStorage();
+  updateGridScale();
+  renderPalette();renderLayers();renderMap();updateOutput();
+  if(paletteRestored)say('前回保存したパレットを復元しました。');
+})();
+</script>
+</body>
+</html>
